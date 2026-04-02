@@ -29,6 +29,9 @@ POSTGRES_PASSWORD=$(openssl rand -hex 16)
 REDIS_PASSWORD=$(openssl rand -hex 16)
 MINIO_SECRET_KEY=$(openssl rand -hex 16)
 GRAFANA_PASSWORD=$(openssl rand -hex 12)
+PIHOLE_PASSWORD=$(openssl rand -hex 12)
+SAMBA_PASSWORD=$(openssl rand -hex 12)
+CODE_SERVER_PASSWORD=$(openssl rand -hex 12)
 
 echo "Generating .env with fresh secrets..."
 
@@ -40,13 +43,17 @@ sed \
   -e "s|change-me-redis-password|${REDIS_PASSWORD}|g" \
   -e "s|change-me-minio-secret|${MINIO_SECRET_KEY}|g" \
   -e "s|change-me-grafana-password|${GRAFANA_PASSWORD}|g" \
+  -e "s|change-me-pihole-password|${PIHOLE_PASSWORD}|g" \
+  -e "s|change-me-samba-password|${SAMBA_PASSWORD}|g" \
+  -e "s|change-me-vscode-password|${CODE_SERVER_PASSWORD}|g" \
   .env.example > .env
 
 echo ""
 echo ".env generated successfully."
 echo ""
-echo "IMPORTANT: You still need to set your LLM API key in .env:"
-echo "  LLM_API_KEY=sk-..."
+echo "IMPORTANT: Optional — set these in .env to unlock more features:"
+echo "  LLM_API_KEY=sk-...                  (OpenAI — Ollama works without it)"
+echo "  TAILSCALE_AUTH_KEY=tskey-auth-...   (VPN remote access)"
+echo "  DUCKDNS_TOKEN=...                   (dynamic DNS)"
 echo ""
-echo "Default admin DB password and other secrets have been randomized."
-echo "Do NOT commit .env to source control."
+echo "All secrets randomized. Do NOT commit .env to source control."

@@ -12,6 +12,14 @@ volumes:
   grafana-data:
   ollama-models:
   sandbox-tmp:
+  # Homelab storage volumes
+  immich-data:
+  immich-model-cache:
+  syncthing-data:
+  syncthing-config:
+  uptime-kuma-data:
+  pihole-data:
+  pihole-dnsmasq:
 
 x-node-common: &node-common
   restart: unless-stopped
@@ -467,6 +475,204 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # HOMELAB + STORAGE SERVICES
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  # ─── Tailscale VPN ────────────────────────────────────────────────────────
+  # Secure remote access from iPhone/iPad anywhere — no port forwarding needed
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: carbon-tailscale
+    restart: unless-stopped
+    network_mode: host           # must be host to manage the host's network
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    environment:
+      TS_AUTHKEY: "${TAILSCALE_AUTH_KEY:-}"
+      TS_STATE_DIR: "/var/lib/tailscale"
+      TS_HOSTNAME: "${TAILSCALE_HOSTNAME:-carbon-copy}"
+      TS_EXTRA_ARGS: "--advertise-exit-node"
+    volumes:
+      - /var/lib/tailscale:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+    profiles:
+      - homelab
+
+  # ─── DuckDNS (Dynamic DNS) ────────────────────────────────────────────────
+  # Keeps yourdomain.duckdns.org pointing to your home IP even when it changes
+  duckdns:
+    image: lscr.io/linuxserver/duckdns:latest
+    container_name: carbon-duckdns
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ:-UTC}"
+      SUBDOMAINS: "${DUCKDNS_SUBDOMAIN:-}"
+      TOKEN: "${DUCKDNS_TOKEN:-}"
+      LOG_FILE: "false"
+    profiles:
+      - homelab
+
+  # ─── Uptime Kuma (Service Status Dashboard) ───────────────────────────────
+  # Simple, beautiful uptime monitor — better than Grafana for at-a-glance status
+  uptime-kuma:
+    image: louislam/uptime-kuma:latest
+    container_name: carbon-uptime-kuma
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    volumes:
+      - uptime-kuma-data:/app/data
+    expose:
+      - "3001"
+    ports:
+      - "3001:3001"              # also expose directly for easy access
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      - homelab
+
+  # ─── Pi-hole (DNS + Ad Blocking) ──────────────────────────────────────────
+  pihole:
+    image: pihole/pihole:latest
+    container_name: carbon-pihole
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8053:80"                # admin UI on port 8053
+    environment:
+      TZ: "${TZ:-UTC}"
+      WEBPASSWORD: "${PIHOLE_PASSWORD:-changeme}"
+      PIHOLE_DNS_: "8.8.8.8;8.8.4.4"
+      DNSSEC: "true"
+    volumes:
+      - pihole-data:/etc/pihole
+      - pihole-dnsmasq:/etc/dnsmasq.d
+    profiles:
+      - homelab
+
+  # ─── Immich (iPhone Photo Backup) ─────────────────────────────────────────
+  # Self-hosted Google Photos alternative — backs up iPhone photos automatically
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:release
+    container_name: carbon-immich-server
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    ports:
+      - "2283:3001"              # Immich web UI
+    environment:
+      DB_HOSTNAME: postgres
+      DB_PORT: "5432"
+      DB_DATABASE_NAME: immich
+      DB_USERNAME: "${POSTGRES_USER}"
+      DB_PASSWORD: "${POSTGRES_PASSWORD}"
+      REDIS_HOSTNAME: redis
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      UPLOAD_LOCATION: /usr/src/app/upload
+      IMMICH_VERSION: release
+    volumes:
+      - immich-data:/usr/src/app/upload
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/server-info/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    profiles:
+      - homelab
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    container_name: carbon-immich-ml
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    volumes:
+      - immich-model-cache:/cache
+    environment:
+      IMMICH_VERSION: release
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3003/ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    profiles:
+      - homelab
+
+  # ─── Samba (Network File Shares) ──────────────────────────────────────────
+  # Access files from iPhone Files app, Windows Explorer, macOS Finder
+  samba:
+    image: dperson/samba:latest
+    container_name: carbon-samba
+    restart: unless-stopped
+    network_mode: host           # SMB requires host networking for discovery
+    environment:
+      TZ: "${TZ:-UTC}"
+      USERID: "1000"
+      GROUPID: "1000"
+    volumes:
+      - ./storage/shared:/mount/shared
+      - ./storage/ai-outputs:/mount/ai-outputs
+      - immich-data:/mount/photos
+    command: >
+      -u "carbon;${SAMBA_PASSWORD:-changeme}"
+      -s "shared;/mount/shared;yes;no;no;carbon"
+      -s "ai-outputs;/mount/ai-outputs;yes;no;yes;carbon"
+      -s "photos;/mount/photos;yes;no;yes;carbon"
+      -p
+    profiles:
+      - homelab
+
+  # ─── Syncthing (Continuous File Sync) ────────────────────────────────────
+  # Sync files between your devices automatically — like Dropbox but self-hosted
+  syncthing:
+    image: lscr.io/linuxserver/syncthing:latest
+    container_name: carbon-syncthing
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - syncthing-config:/config
+      - syncthing-data:/data
+      - ./storage/shared:/data/shared
+    ports:
+      - "8384:8384"              # Syncthing web UI
+      - "22000:22000/tcp"        # Syncthing sync port
+      - "22000:22000/udp"
+      - "21027:21027/udp"        # Syncthing discovery
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8384"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    profiles:
+      - homelab
 
   # ─── VS Code Dev Environment ───────────────────────────────────────────────
   code-server:

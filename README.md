@@ -1,6 +1,6 @@
-# Carbon-Copy — AI Cloud Infrastructure
+# Carbon-Copy — AI Cloud, Homelab & Storage Server
 
-A self-hosted, Docker-based cloud platform for running, developing, and managing AI projects. Accessible from any device — including iPhone and iPad via an installable PWA.
+A self-hosted, Docker-based platform that is simultaneously your AI cloud, homelab, and personal storage server. Runs on any OS. Controlled from iPhone or iPad.
 
 ---
 
@@ -16,6 +16,13 @@ A self-hosted, Docker-based cloud platform for running, developing, and managing
 | **Dev environment in browser** | VS Code (code-server) at `/code` |
 | **Container management** | VM Manager: start/stop/restart/inspect any container via API |
 | **Monitoring** | Prometheus + Grafana for all services |
+| **iPhone photo backup** | Immich — self-hosted Google Photos at `/photos` |
+| **Network file shares** | Samba — access files from iPhone Files app, Windows, macOS |
+| **File sync across devices** | Syncthing — continuous, peer-to-peer file sync |
+| **VPN remote access** | Tailscale — access everything from anywhere, no port forwarding |
+| **Ad blocking + local DNS** | Pi-hole — network-wide ad blocking |
+| **Dynamic DNS** | DuckDNS — keeps your home domain updated when your IP changes |
+| **Uptime dashboard** | Uptime Kuma — simple service status page at `/status` |
 
 ---
 
@@ -353,6 +360,95 @@ carbon-copy/
 | `SANDBOX_CPU_LIMIT` | `2` | Max CPU cores per run |
 | `SANDBOX_MEMORY_MB` | `2048` | Max RAM per run |
 | `SANDBOX_TIMEOUT_MINUTES` | `30` | Auto-kill timeout |
+
+---
+
+---
+
+## Homelab + Storage
+
+### Start with homelab services
+
+```bash
+bash scripts/start-homelab.sh     # Linux/macOS
+.\scripts\start-homelab.ps1       # Windows
+```
+
+Homelab services use Docker Compose [profiles](https://docs.docker.com/compose/profiles/) so they don't run unless explicitly started.
+
+### Service map
+
+| URL | Service | What it does |
+|---|---|---|
+| `http://HOST/status` | Uptime Kuma | Is everything up? Simple status page |
+| `http://HOST/photos` | Immich | iPhone photo backup — like iCloud, self-hosted |
+| `http://HOST/sync` | Syncthing | File sync dashboard |
+| `http://HOST/dns` | Pi-hole | DNS + ad blocker admin |
+| `http://HOST:2283` | Immich (direct) | Mobile app endpoint |
+| `http://HOST:8384` | Syncthing (direct) | Sync config |
+
+### iPhone photo backup (Immich)
+
+1. Install the **Immich** app from the App Store
+2. Open it → tap **+** → enter `http://YOUR_HOST/photos` as the server URL
+3. Log in and enable **Background Backup** — your camera roll backs up automatically
+
+### Access files from iPhone (Samba)
+
+1. Open the **Files** app on iPhone
+2. Tap **...** (top right) → **Connect to Server**
+3. Enter `smb://YOUR_HOST_IP`
+4. Username: `carbon`, Password: `SAMBA_PASSWORD` from `.env`
+5. Your shared folders appear in Files alongside iCloud
+
+### Access files from Windows
+
+```
+\\YOUR_HOST_IP\shared
+\\YOUR_HOST_IP\ai-outputs
+\\YOUR_HOST_IP\photos
+```
+
+### VPN access from anywhere (Tailscale)
+
+1. Get a free auth key at [tailscale.com](https://login.tailscale.com/admin/settings/keys)
+2. Add it to `.env`: `TAILSCALE_AUTH_KEY=tskey-auth-...`
+3. Run `bash scripts/start-homelab.sh`
+4. Install Tailscale on your iPhone — Carbon-Copy appears as `carbon-copy` in your tailnet
+5. Access everything via `http://carbon-copy/app` from anywhere in the world
+
+### Dynamic DNS (DuckDNS)
+
+1. Create a free account at [duckdns.org](https://www.duckdns.org)
+2. Create a subdomain (e.g. `mycarbon`)
+3. Set in `.env`:
+   ```env
+   DUCKDNS_SUBDOMAIN=mycarbon
+   DUCKDNS_TOKEN=your-token
+   ```
+4. Your server is reachable at `mycarbon.duckdns.org` even when your home IP changes
+
+### Automated backups
+
+```bash
+bash scripts/backup.sh
+```
+
+Backs up PostgreSQL (gzipped SQL dump) and your `.env` (AES-256 encrypted) to `storage/backups/`. Keeps the last 7 backups. Schedule it with cron:
+
+```bash
+# Run backup every night at 2am
+0 2 * * * cd /path/to/carbon-copy && bash scripts/backup.sh
+```
+
+### Storage layout
+
+```
+storage/
+├── shared/       Samba share + Syncthing folder — all devices
+├── ai-outputs/   AI model outputs exported for access via Files app
+└── backups/      Automated database + config backups
+```
 
 ---
 
