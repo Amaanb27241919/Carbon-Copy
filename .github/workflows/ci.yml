@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Validate docker-compose ──────────────────────────────────────────────────
+  compose-validate:
+    name: Validate docker-compose
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check compose config
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
+          echo "docker-compose.yml is valid"
+
+  # ── Lint Node.js services ────────────────────────────────────────────────────
+  lint-node:
+    name: Lint Node.js services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, auth, data-server, vm-manager, model-router, sandbox]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package.json
+      - name: Install deps
+        working-directory: ${{ matrix.service }}
+        run: npm ci --production
+      - name: Check syntax
+        working-directory: ${{ matrix.service }}
+        run: node --check src/index.js src/app.js
+
+  # ── Lint Python services ─────────────────────────────────────────────────────
+  lint-python:
+    name: Lint Python services
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [openclaw, nemoclaw]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        working-directory: services/${{ matrix.service }}
+        run: pip install -r requirements.txt --quiet
+      - name: Check syntax
+        working-directory: services/${{ matrix.service }}
+        run: python -m py_compile main.py config.py
+
+  # ── Validate web-app ─────────────────────────────────────────────────────────
+  lint-webapp:
+    name: Type-check web app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web-app/package.json
+      - name: Install deps
+        working-directory: web-app
+        run: npm ci
+      - name: Type check
+        working-directory: web-app
+        run: npx tsc --noEmit
+
+  # ── Security: check for secrets ──────────────────────────────────────────────
+  secret-scan:
+    name: Scan for secrets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect hardcoded secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
