@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect width="512" height="512" rx="112" fill="url(#grad512)"/>
+  <defs>
+    <linearGradient id="grad512" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f172a;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <!-- Hexagon background for icon -->
+  <polygon points="256,74 394,154 394,314 256,394 118,314 118,154" fill="#1e3a5f" opacity="0.6"/>
+  <polygon points="256,106 362,170 362,298 256,362 150,298 150,170" fill="#1e40af" opacity="0.4"/>
+  <!-- C letter -->
+  <text
+    x="256"
+    y="308"
+    font-family="-apple-system, BlinkMacSystemFont, SF Pro Display, system-ui, sans-serif"
+    font-size="234"
+    font-weight="700"
+    text-anchor="middle"
+    fill="#f8fafc"
+    letter-spacing="-4"
+  >C</text>
+  <!-- Accent dot -->
+  <circle cx="374" cy="160" r="26" fill="#6366f1"/>
+  <!-- Small decorative dots -->
+  <circle cx="138" cy="352" r="12" fill="#6366f1" opacity="0.5"/>
+  <circle cx="374" cy="352" r="8" fill="#6366f1" opacity="0.3"/>
+</svg>
