@@ -1,0 +1,20 @@
+{
+  "name": "carbon-vm-manager",
+  "version": "1.0.0",
+  "description": "Carbon-Copy VM/Container Manager",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dockerode": "^4.0.2",
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "winston": "^3.15.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

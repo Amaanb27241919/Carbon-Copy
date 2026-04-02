@@ -1,0 +1,22 @@
+{
+  "name": "carbon-sandbox",
+  "version": "1.0.0",
+  "description": "Safe AI repo sandbox runner",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "dockerode": "^4.0.2",
+    "simple-git": "^3.27.0",
+    "socket.io": "^4.8.0",
+    "pg": "^8.13.0",
+    "winston": "^3.15.0",
+    "zod": "^3.23.8",
+    "uuid": "^10.0.0",
+    "rimraf": "^6.0.1"
+  },
+  "engines": { "node": ">=20.0.0" }
+}
