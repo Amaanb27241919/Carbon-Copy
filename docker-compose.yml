@@ -12,6 +12,7 @@ volumes:
   grafana-data:
   ollama-models:
   sandbox-tmp:
+  vm-images:
   # Homelab storage volumes
   immich-data:
   immich-model-cache:
@@ -694,3 +695,61 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # ─── KVM Manager (QEMU/KVM Virtual Machines) ──────────────────────────────
+  kvm-manager:
+    build:
+      context: ./kvm-manager
+      dockerfile: Dockerfile
+    container_name: carbon-kvm-manager
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    env_file:
+      - .env
+    expose:
+      - "3007"
+    ports:
+      # SSH ports for VMs (VM0=2200, VM1=2201, ... VM9=2209)
+      - "2200-2209:2200-2209"
+      # VNC ports for VMs — accessed via noVNC proxy
+      - "5900-5909:5900-5909"
+    environment:
+      PORT: "3007"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      INTERNAL_SERVICE_TOKEN: "${INTERNAL_SERVICE_TOKEN}"
+      VM_IMAGES_DIR: "/var/lib/carbon-vms"
+      VM_SSH_PORT_START: "2200"
+      VM_VNC_PORT_START: "5900"
+      VM_MAX_COUNT: "${VM_MAX_COUNT:-10}"
+      HOST_IP: "${HOST_IP:-localhost}"
+    devices:
+      # KVM acceleration — only works on Linux hosts with hardware virtualisation
+      # Remove this block on macOS/Windows (falls back to software emulation)
+      - /dev/kvm:/dev/kvm
+    volumes:
+      - vm-images:/var/lib/carbon-vms
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ─── noVNC (browser-based VM console) ────────────────────────────────────
+  novnc:
+    image: theasp/novnc:latest
+    container_name: carbon-novnc
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    environment:
+      DISPLAY_WIDTH: "1280"
+      DISPLAY_HEIGHT: "800"
+      # noVNC proxies to kvm-manager host on the VNC port
+      VNC_SERVER: "kvm-manager"
+    expose:
+      - "8080"

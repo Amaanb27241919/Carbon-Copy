@@ -88,11 +88,12 @@ const makeProxy = (target, pathRewrite) => {
 };
 
 // ─── Proxy Routes ─────────────────────────────────────────────────────────────
-const OPENCLAW_SERVICE_URL = process.env.OPENCLAW_SERVICE_URL || 'http://openclaw:8001';
-const NEMOCLAW_SERVICE_URL = process.env.NEMOCLAW_SERVICE_URL || 'http://nemoclaw:8002';
-const DATA_SERVER_URL = process.env.DATA_SERVER_URL || 'http://data-server:3002';
-const VM_MANAGER_URL = process.env.VM_MANAGER_URL || 'http://vm-manager:3003';
-const MODEL_ROUTER_URL = process.env.MODEL_ROUTER_URL || 'http://model-router:3004';
+const OPENCLAW_SERVICE_URL  = process.env.OPENCLAW_SERVICE_URL  || 'http://openclaw:8001';
+const NEMOCLAW_SERVICE_URL  = process.env.NEMOCLAW_SERVICE_URL  || 'http://nemoclaw:8002';
+const DATA_SERVER_URL       = process.env.DATA_SERVER_URL       || 'http://data-server:3002';
+const VM_MANAGER_URL        = process.env.VM_MANAGER_URL        || 'http://vm-manager:3003';
+const MODEL_ROUTER_URL      = process.env.MODEL_ROUTER_URL      || 'http://model-router:3004';
+const KVM_MANAGER_URL       = process.env.KVM_MANAGER_URL       || 'http://kvm-manager:3007';
 
 // OpenClaw — AI code intelligence
 app.use(
@@ -112,13 +113,21 @@ app.use(
   makeProxy(DATA_SERVER_URL, { '^/api/data': '' })
 );
 
-// VM Manager — admin only
+// VM Manager (Docker containers) — admin only
 app.use('/api/vm', (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden', message: 'Admin role required' });
   }
   next();
 }, makeProxy(VM_MANAGER_URL, { '^/api/vm': '' }));
+
+// KVM Manager (QEMU/KVM virtual machines) — admin only
+app.use('/api/kvm', (req, res, next) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden', message: 'Admin role required' });
+  }
+  next();
+}, makeProxy(KVM_MANAGER_URL, { '^/api/kvm': '' }));
 
 // Model Router — universal AI chat/embed/models (/api/models/*, /api/chat, /api/embed)
 app.use(
