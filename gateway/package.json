@@ -1,0 +1,22 @@
+{
+  "name": "carbon-gateway",
+  "version": "1.0.0",
+  "description": "Carbon-Copy API Gateway",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "express": "^4.21.0",
+    "express-rate-limit": "^7.4.1",
+    "http-proxy-middleware": "^3.0.3",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "winston": "^3.15.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
