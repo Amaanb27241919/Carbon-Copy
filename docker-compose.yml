@@ -11,6 +11,7 @@ volumes:
   prometheus-data:
   grafana-data:
   ollama-models:
+  sandbox-tmp:
 
 x-node-common: &node-common
   restart: unless-stopped
@@ -59,6 +60,7 @@ services:
       DATA_SERVER_URL: "http://data-server:3002"
       VM_MANAGER_URL: "http://vm-manager:3003"
       MODEL_ROUTER_URL: "http://model-router:3004"
+      SANDBOX_SERVICE_URL: "http://sandbox:3005"
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
     depends_on:
       redis:
@@ -381,3 +383,77 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  # ─── Sandbox Runner ───────────────────────────────────────────────────────
+  sandbox:
+    build:
+      context: ./sandbox
+      dockerfile: Dockerfile
+    container_name: carbon-sandbox
+    <<: *node-common
+    expose:
+      - "3005"
+    environment:
+      PORT: "3005"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      DOCKER_SOCKET: "/var/run/docker.sock"
+      SANDBOX_TMP_DIR: "/tmp/sandbox"
+      SANDBOX_CPU_LIMIT: "${SANDBOX_CPU_LIMIT:-2}"
+      SANDBOX_MEMORY_MB: "${SANDBOX_MEMORY_MB:-2048}"
+      SANDBOX_TIMEOUT_MINUTES: "${SANDBOX_TIMEOUT_MINUTES:-30}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - sandbox-tmp:/tmp/sandbox
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ─── Web App (iPhone/iPad PWA) ─────────────────────────────────────────────
+  web-app:
+    build:
+      context: ./web-app
+      dockerfile: Dockerfile
+    container_name: carbon-web-app
+    <<: *node-common
+    expose:
+      - "3006"
+    environment:
+      PORT: "3006"
+      NEXT_PUBLIC_API_URL: "/api"
+      NEXT_PUBLIC_APP_NAME: "Carbon Cloud"
+    depends_on:
+      gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3006"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─── VS Code Dev Environment ───────────────────────────────────────────────
+  code-server:
+    image: codercom/code-server:latest
+    container_name: carbon-code-server
+    restart: unless-stopped
+    networks:
+      - carbon-net
+    environment:
+      PASSWORD: "${CODE_SERVER_PASSWORD:-changeme}"
+    volumes:
+      - ./:/home/coder/carbon-copy
+      - sandbox-tmp:/home/coder/sandbox
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
