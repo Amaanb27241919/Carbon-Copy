@@ -120,6 +120,22 @@ app.use('/api/vm', (req, res, next) => {
   next();
 }, makeProxy(VM_MANAGER_URL, { '^/api/vm': '' }));
 
+// Model Router — universal AI chat/embed/models (/api/models/*, /api/chat, /api/embed)
+app.use(
+  '/api/models',
+  makeProxy(MODEL_ROUTER_URL, { '^/api/models': '/models' })
+);
+
+app.use(
+  '/api/chat',
+  makeProxy(MODEL_ROUTER_URL, { '^/api/chat': '/chat' })
+);
+
+app.use(
+  '/api/embed',
+  makeProxy(MODEL_ROUTER_URL, { '^/api/embed': '/embed' })
+);
+
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' });
