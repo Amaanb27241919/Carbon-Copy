@@ -10,6 +10,7 @@ volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+  ollama-models:
 
 x-node-common: &node-common
   restart: unless-stopped

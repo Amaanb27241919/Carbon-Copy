@@ -1,45 +1,52 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# Detect OS
+OS="$(uname -s)"
+ARCH="$(uname -m)"
 
-cd "$PROJECT_DIR"
+echo "Carbon-Copy AI Cloud"
+echo "OS: $OS | Arch: $ARCH"
+echo ""
 
-# ─── Check .env ───────────────────────────────────────────────────────────────
-if [ ! -f ".env" ]; then
-  echo "ERROR: .env file not found."
-  echo ""
-  echo "To get started, run:"
-  echo "  bash scripts/generate-secrets.sh"
-  echo ""
-  echo "Or copy the example and fill in your own values:"
-  echo "  cp .env.example .env"
-  exit 1
+# Check .env
+if [ ! -f .env ]; then
+    echo "ERROR: .env not found. Run: bash scripts/generate-secrets.sh"
+    exit 1
 fi
 
-# ─── Warn about unchanged placeholder secrets ─────────────────────────────────
+# Warn about placeholder secrets
 if grep -q "change-me" .env 2>/dev/null; then
-  echo "WARNING: .env contains placeholder secrets (change-me). Run generate-secrets.sh first for production use."
-  echo ""
+    echo "WARNING: .env contains placeholder secrets (change-me). Run generate-secrets.sh first for production use."
+    echo ""
 fi
 
-# ─── Start services ───────────────────────────────────────────────────────────
+# Check Docker
+if ! command -v docker &> /dev/null; then
+    echo "ERROR: Docker not found."
+    if [ "$OS" = "Darwin" ]; then
+        echo "Install: https://docs.docker.com/desktop/mac/"
+    elif [ "$OS" = "Linux" ]; then
+        echo "Install: curl -fsSL https://get.docker.com | sh"
+    fi
+    exit 1
+fi
+
+# Start services
 echo "Starting Carbon-Copy services..."
-docker compose up -d --build
+docker compose up -d
 
 echo ""
-echo "Services are starting. Health checks may take up to 60 seconds."
+echo "Services running:"
+echo "  API Gateway:   http://localhost:80"
+echo "  Model Router:  http://localhost:3004 (internal)"
+echo "  Ollama:        http://localhost:11434"
+echo "  MinIO Console: http://localhost:9001"
+echo "  Grafana:       http://localhost:3001"
 echo ""
-echo "Service Endpoints:"
-echo "  API Gateway:   http://localhost/api"
-echo "  OpenClaw:      http://localhost/api/openclaw"
-echo "  NemoClaw:      http://localhost/api/nemoclaw"
-echo "  Auth login:    http://localhost/api/... (POST /auth/login)"
-echo ""
-echo "Internal (not exposed externally):"
-echo "  Grafana:       docker exec carbon-grafana -> localhost:3000"
-echo "  Prometheus:    docker exec carbon-prometheus -> localhost:9090"
-echo "  MinIO Console: docker exec carbon-minio -> localhost:9001"
-echo ""
-echo "Run 'docker compose logs -f' to tail all logs."
+echo "API Endpoints:"
+echo "  POST /api/openclaw/analyze"
+echo "  POST /api/openclaw/generate"
+echo "  POST /api/nemoclaw/classify"
+echo "  POST /api/nemoclaw/summarize"
+echo "  POST /api/nemoclaw/embed"
