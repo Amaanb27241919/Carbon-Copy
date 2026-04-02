@@ -42,6 +42,7 @@ services:
       retries: 3
 
   # ─── API Gateway ──────────────────────────────────────────────────────────
+  # Proxy routes: /api/openclaw, /api/nemoclaw, /api/data, /api/vm, /api/models/*, /api/chat
   gateway:
     build:
       context: ./gateway
@@ -57,6 +58,7 @@ services:
       NEMOCLAW_SERVICE_URL: "http://nemoclaw:8002"
       DATA_SERVER_URL: "http://data-server:3002"
       VM_MANAGER_URL: "http://vm-manager:3003"
+      MODEL_ROUTER_URL: "http://model-router:3004"
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
     depends_on:
       redis:
@@ -147,6 +149,64 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  # ─── Ollama (Local LLM Inference) ────────────────────────────────────────
+  ollama:
+    build: ./services/ollama
+    container_name: carbon-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_PRELOAD_MODELS=${OLLAMA_PRELOAD_MODELS:-}
+    networks:
+      - carbon-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # ─── Model Router (Universal AI Provider Router) ──────────────────────────
+  model-router:
+    build: ./model-router
+    container_name: carbon-model-router
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - DEFAULT_PROVIDER=${DEFAULT_PROVIDER:-ollama}
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_DEFAULT_MODEL=${OLLAMA_DEFAULT_MODEL:-llama3.2}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_DEFAULT_MODEL=${OPENAI_DEFAULT_MODEL:-gpt-4o}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - ANTHROPIC_DEFAULT_MODEL=${ANTHROPIC_DEFAULT_MODEL:-claude-sonnet-4-6}
+      - HF_API_KEY=${HF_API_KEY:-}
+      - HF_DEFAULT_MODEL=${HF_DEFAULT_MODEL:-mistralai/Mistral-7B-Instruct-v0.3}
+      - INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN}
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      - ollama
+      - postgres
+    networks:
+      - carbon-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   # ─── OpenClaw (AI Code Intelligence) ─────────────────────────────────────
   openclaw:

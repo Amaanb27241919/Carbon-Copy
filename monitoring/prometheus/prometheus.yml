@@ -32,3 +32,8 @@ scrape_configs:
     static_configs:
       - targets: ['nemoclaw:8002']
     metrics_path: /metrics
+
+  - job_name: 'model-router'
+    static_configs:
+      - targets: ['model-router:3004']
+    metrics_path: /metrics
