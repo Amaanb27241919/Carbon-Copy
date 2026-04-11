@@ -1,0 +1,13 @@
+{
+  "id": "competitive_analysis",
+  "name": "competitive_analysis",
+  "category": "strategy",
+  "description": "Map the competitive landscape — identify players, strengths, weaknesses, market positioning",
+  "template": {
+    "sections": ["market_overview", "competitor_matrix", "strengths_weaknesses", "market_share", "differentiation", "strategic_gaps", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "comprehensive"
+  },
+  "systemPrompt": "You are a competitive intelligence expert. Identify and analyze all relevant competitors with objective assessment of strengths and weaknesses.",
+  "exampleGoal": "Analyze the competitive landscape for {company_name} in the {industry} sector"
+}

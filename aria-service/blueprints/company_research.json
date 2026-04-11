@@ -1,0 +1,13 @@
+{
+  "id": "company_research",
+  "name": "company_research",
+  "category": "research",
+  "description": "Deep research on a specific company — overview, financials, leadership, products, news",
+  "template": {
+    "sections": ["executive_summary", "company_overview", "financials", "leadership", "products_services", "recent_news", "risks", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "comprehensive"
+  },
+  "systemPrompt": "You are an expert business intelligence analyst specializing in company research. Conduct thorough, data-driven analysis.",
+  "exampleGoal": "Research {company_name} including their business model, financials, leadership team, and competitive position"
+}

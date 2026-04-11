@@ -20,7 +20,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     if (!isAuthenticated && !isPublic) {
       router.replace('/login');
-    } else if (isAuthenticated && isPublic) {
+    } else if (isAuthenticated && pathname === '/login') {
       router.replace('/');
     }
   }, [isAuthenticated, pathname, router]);

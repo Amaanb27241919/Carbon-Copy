@@ -3,14 +3,16 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Install QEMU for host architecture (x86 on Linux, arm on macOS/ARM)
 RUN apt-get update && apt-get install -y \
-    qemu-system-x86_64 \
     qemu-utils \
-    qemu-kvm \
     wget \
     curl \
-    ovmf \
     ca-certificates \
+    && ARCH=$(dpkg --print-architecture) \
+    && if [ "$ARCH" = "amd64" ]; then apt-get install -y qemu-system-x86_64 qemu-kvm ovmf; \
+       elif [ "$ARCH" = "arm64" ]; then apt-get install -y qemu-system-arm; \
+       fi \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -18,7 +20,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --production
+RUN npm install --omit=dev
 
 COPY src ./src
 

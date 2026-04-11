@@ -1,0 +1,13 @@
+{
+  "id": "ma_research",
+  "name": "ma_research",
+  "category": "strategy",
+  "description": "M&A target research — acquisition fit, synergies, risks, integration complexity, valuation range",
+  "template": {
+    "sections": ["strategic_fit", "synergies", "target_overview", "valuation_range", "integration_complexity", "deal_risks", "comparable_transactions", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "comprehensive"
+  },
+  "systemPrompt": "You are an M&A advisor. Evaluate acquisition targets with rigorous analysis of strategic fit, synergies, and deal risks.",
+  "exampleGoal": "Evaluate {company_name} as a potential acquisition target"
+}

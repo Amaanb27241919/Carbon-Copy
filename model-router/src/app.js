@@ -66,6 +66,30 @@ app.get('/metrics', (_req, res) => {
 // POST /chat — universal chat completion
 app.use('/chat', chatRouter);
 
+// OpenAI-compatible endpoint for services using the OpenAI SDK
+app.post('/v1/chat/completions', async (req, res) => {
+  const { resolveProvider, getProvider } = require('./providers');
+  try {
+    const messages = req.body.messages || [];
+    const providerName = process.env.DEFAULT_PROVIDER || 'ollama';
+    const model = req.body.model;
+    const providerKey = await resolveProvider(providerName);
+    const provider = getProvider(providerKey);
+    if (!provider) return res.status(503).json({ error: { message: 'Provider unavailable' } });
+    const result = await provider.chat(messages, model, req.body.options || {});
+    // Return OpenAI-compatible format
+    res.json({
+      id: 'chatcmpl-carbon-' + Date.now(),
+      object: 'chat.completion',
+      model: model || providerKey,
+      choices: [{ index: 0, message: { role: 'assistant', content: result.content }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: result.tokensUsed || 0 },
+    });
+  } catch (err) {
+    res.status(500).json({ error: { message: err.message } });
+  }
+});
+
 // POST /embed — universal embedding
 app.use('/embed', embedRouter);
 

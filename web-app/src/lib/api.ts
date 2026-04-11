@@ -32,7 +32,7 @@ api.interceptors.response.use(
       useAuthStore.getState().logout();
       // Redirect to login (client-side only)
       if (typeof window !== 'undefined') {
-        window.location.href = '/login';
+        window.location.href = '/app/login';
       }
     }
     return Promise.reject(error);
@@ -200,5 +200,134 @@ export const settingsApi = {
   },
   updateSettings: async (settings: Record<string, string>): Promise<void> => {
     await api.put('/settings', settings);
+  },
+};
+
+// ─── ARIA Intelligence API ────────────────────────────────────────────────────
+
+export interface AriaMission {
+  id: string;
+  client_id: string;
+  goal: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  tokens_used: number;
+  cost_usd: number;
+  output?: Record<string, unknown>;
+  created_at: string;
+  completed_at?: string;
+}
+
+export interface AriaAgent {
+  id: string;
+  name: string;
+  role: string;
+  status: 'idle' | 'planning' | 'executing' | 'outputting' | 'delivered' | 'error';
+  currentTask: string | null;
+  tokensUsedToday: number;
+  costToday: number;
+  lastUpdate: string;
+}
+
+export interface WatchdogMonitor {
+  id: string;
+  client_id: string;
+  target_entity: string;
+  signal_types: string[];
+  status: 'active' | 'paused';
+  last_check: string | null;
+  created_at: string;
+}
+
+export interface DossierFile {
+  id: string;
+  client_id: string;
+  filename: string;
+  ai_summary: string;
+  file_path: string;
+  uploaded_at: string;
+}
+
+export interface Blueprint {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  created_at: string;
+}
+
+export interface AriaBudget {
+  limits: { dailyUSD: number; monthlyUSD: number };
+  today: { tokensUsed: number; costUSD: number; missionsRun: number };
+  month: { tokensUsed: number; costUSD: number; missionsRun: number };
+  utilization: { dailyPct: number; monthlyPct: number };
+}
+
+export const ariaApi = {
+  // Missions
+  getMissions: async (params?: { clientId?: string; status?: string; limit?: number }): Promise<AriaMission[]> => {
+    const { data } = await api.get<{ status: string; data: AriaMission[] }>('/missions', { params });
+    return data.data;
+  },
+  createMission: async (payload: {
+    clientId: string;
+    goal: string;
+    context?: string;
+    blueprintId?: string;
+  }): Promise<{ missionId: string; status: string }> => {
+    const { data } = await api.post('/missions', payload);
+    return data.data;
+  },
+  getMission: async (id: string): Promise<AriaMission> => {
+    const { data } = await api.get<{ status: string; data: AriaMission }>(`/missions/${id}`);
+    return data.data;
+  },
+
+  // Agents
+  getAgents: async (): Promise<AriaAgent[]> => {
+    const { data } = await api.get<{ status: string; data: AriaAgent[] }>('/agents');
+    return data.data;
+  },
+
+  // WatchDog
+  getWatchdogMonitors: async (clientId: string): Promise<WatchdogMonitor[]> => {
+    const { data } = await api.get<{ status: string; data: WatchdogMonitor[] }>('/watchdog', { params: { clientId } });
+    return data.data;
+  },
+  createMonitor: async (payload: {
+    clientId: string;
+    targetEntity: string;
+    signalTypes?: string[];
+  }): Promise<WatchdogMonitor> => {
+    const { data } = await api.post<{ status: string; data: WatchdogMonitor }>('/watchdog', payload);
+    return data.data;
+  },
+
+  // Dossier
+  getDossierFiles: async (clientId: string): Promise<DossierFile[]> => {
+    const { data } = await api.get<{ status: string; data: DossierFile[] }>('/dossier', { params: { clientId } });
+    return data.data;
+  },
+  uploadDossierFile: async (clientId: string, file: File): Promise<DossierFile> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('clientId', clientId);
+    const { data } = await api.post<{ status: string; data: DossierFile }>('/dossier', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data.data;
+  },
+
+  // Blueprints
+  getBlueprints: async (category?: string): Promise<Blueprint[]> => {
+    const { data } = await api.get<{ status: string; data: Blueprint[] }>('/blueprints', {
+      params: category ? { category } : {},
+    });
+    return data.data;
+  },
+
+  // Budget
+  getBudget: async (): Promise<AriaBudget> => {
+    const { data } = await api.get<{ status: string; data: AriaBudget }>('/aria-budget');
+    return data.data;
   },
 };

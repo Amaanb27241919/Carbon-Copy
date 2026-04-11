@@ -8,6 +8,7 @@ A self-hosted, Docker-based platform that is simultaneously your AI cloud, homel
 
 | Capability | How |
 |---|---|
+| **ARIA Intelligence Platform** | 5-agent AI research system: scan, research, synthesis, delivery, client_mgr — run missions, monitor entities (WatchDog), manage document vaults (Dossier), and choose from 10 research blueprints |
 | **Run AI GitHub repos safely** | Sandbox clones & runs any repo in an isolated container with CPU/RAM/timeout limits |
 | **Host AI services** | OpenClaw (code intelligence) + NemoClaw (NLP) as microservices |
 | **Use any AI model** | Model router switches between Ollama (local), Claude, OpenAI, HuggingFace at runtime |
@@ -72,6 +73,8 @@ iPhone/iPad/Browser │                                                        �
 | `model-router` | 3004 | Universal AI provider router |
 | `sandbox` | 3005 | Safe GitHub repo runner in isolated containers |
 | `web-app` | 3006 | Next.js PWA — iPhone/iPad control panel |
+| `kvm-manager` | 3007 | QEMU/KVM virtual machine lifecycle manager |
+| `aria-service` | 3008 | ARIA Intelligence Platform — missions, WatchDog, Dossier, Blueprints |
 | `openclaw` | 8001 | AI code analysis + generation (Python/FastAPI) |
 | `nemoclaw` | 8002 | AI classify + summarize + embed (Python/FastAPI) |
 | `ollama` | 11434 | Local LLM server (any model, GPU or CPU) |
@@ -81,6 +84,72 @@ iPhone/iPad/Browser │                                                        �
 | `minio` | 9000/9001 | S3-compatible object storage + console |
 | `prometheus` | 9090 | Metrics scraper |
 | `grafana` | 3000 | Metrics dashboard |
+
+---
+
+---
+
+## ARIA Intelligence Platform
+
+Carbon-Copy v2 includes a built-in AI intelligence platform accessible from the Missions tab of the PWA.
+
+### Core Features
+
+| Feature | Description |
+|---|---|
+| **Missions** | Submit research goals to the 5-agent pipeline. ARIA scan → research → synthesize → deliver. |
+| **WatchDog** | Monitor companies, people, or topics for signal changes (funding, leadership, regulatory, news). |
+| **Dossier** | Upload documents — ARIA auto-summarizes and injects them as context into future missions. |
+| **Blueprints** | 10 built-in research templates: competitive analysis, M&A, market research, due diligence, and more. |
+| **Budget tracking** | Daily and monthly token/cost limits with utilization metrics in the dashboard. |
+
+### API Endpoints
+
+```bash
+# Submit a research mission
+curl -X POST http://localhost/api/missions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"clientId":"<uuid>","goal":"Analyse the competitive landscape for AI CRMs"}'
+
+# Get agent statuses
+curl http://localhost/api/agents -H "Authorization: Bearer $TOKEN"
+
+# Create a WatchDog monitor
+curl -X POST http://localhost/api/watchdog \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"clientId":"<uuid>","targetEntity":"Salesforce","signalTypes":["funding","product_launch"]}'
+
+# Browse blueprints
+curl http://localhost/api/blueprints -H "Authorization: Bearer $TOKEN"
+
+# Check budget
+curl http://localhost/api/aria-budget -H "Authorization: Bearer $TOKEN"
+```
+
+### 5-Agent Pipeline
+
+```
+Mission submitted
+      │
+      ▼
+ [Scanner]       — classifies request type and priority
+      │
+      ▼
+ [Researcher]    — runs AI-powered deep research via model-router
+      │
+      ▼
+ [Synthesizer]   — formats output into structured JSON
+      │
+      ▼
+ [Delivery]      — sends via email (Resend) or Slack webhook
+      │
+      ▼
+ [Client Manager] — updates client knowledge vault
+```
+
+All AI calls route through the model-router — no direct Anthropic/OpenAI SDK calls.
 
 ---
 

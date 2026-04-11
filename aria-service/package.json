@@ -1,0 +1,21 @@
+{
+  "name": "aria-service",
+  "version": "2.0.0",
+  "description": "ARIA Intelligence Service — mission orchestration, WatchDog, Dossier, Blueprints",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.11.3",
+    "socket.io": "^4.7.5",
+    "uuid": "^9.0.1",
+    "zod": "^3.22.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

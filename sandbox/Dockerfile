@@ -2,7 +2,7 @@ FROM node:20-alpine
 RUN apk add --no-cache wget git
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --production
+RUN npm install --omit=dev
 COPY src ./src
 EXPOSE 3005
 CMD ["node", "src/index.js"]

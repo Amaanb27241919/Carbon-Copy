@@ -37,3 +37,8 @@ scrape_configs:
     static_configs:
       - targets: ['model-router:3004']
     metrics_path: /metrics
+
+  - job_name: 'aria-service'
+    static_configs:
+      - targets: ['aria-service:3008']
+    metrics_path: /metrics

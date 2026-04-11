@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, Database, Cpu, HardDrive, Activity } from 'lucide-react';
+import { RefreshCw, Database, Cpu, HardDrive, Activity, Target, CheckCircle, Clock, DollarSign } from 'lucide-react';
 import { useServices } from '@/hooks/useServices';
 import { ServiceCard, ServiceCardSkeleton } from '@/components/ServiceCard';
 import { PageHeader } from '@/components/PageHeader';
-import { api, StorageStats } from '@/lib/api';
+import { api, StorageStats, ariaApi, AriaMission, AriaAgent, AriaBudget } from '@/lib/api';
 import { cn, formatBytes, timeAgo } from '@/lib/utils';
 
 interface SystemStats {
@@ -63,6 +64,26 @@ function useSystemStats() {
   });
 }
 
+function useAriaData() {
+  const missions = useQuery<AriaMission[]>({
+    queryKey: ['missions-recent'],
+    queryFn: () => ariaApi.getMissions({ limit: 3 }),
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+  });
+  const agents = useQuery<AriaAgent[]>({
+    queryKey: ['agents'],
+    queryFn: ariaApi.getAgents,
+    refetchInterval: 15_000,
+  });
+  const budget = useQuery<AriaBudget>({
+    queryKey: ['budget'],
+    queryFn: ariaApi.getBudget,
+    refetchInterval: 60_000,
+  });
+  return { missions, agents, budget };
+}
+
 function useRecentOutputs() {
   return useQuery<RecentOutput[]>({
     queryKey: ['recent-outputs'],
@@ -84,6 +105,7 @@ export default function DashboardPage() {
   const { services, isLoading: servicesLoading, refetch, upCount, downCount } = useServices();
   const { data: stats, isLoading: statsLoading } = useSystemStats();
   const { data: recentOutputs = [], isLoading: outputsLoading } = useRecentOutputs();
+  const { missions: ariaMissions, agents: ariaAgents, budget: ariaBudget } = useAriaData();
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -239,6 +261,110 @@ export default function DashboardPage() {
               )}
               <span className="text-[10px] text-slate-500">Containers</span>
             </div>
+          </div>
+        </section>
+
+        {/* ARIA Intelligence */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">
+              ARIA Intelligence
+            </h2>
+            <Link href="/missions" className="text-xs text-indigo-400 font-medium">
+              View all
+            </Link>
+          </div>
+
+          {/* Budget bar */}
+          {ariaBudget.data && (
+            <div className="card p-3 mb-3 space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span className="flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  Today&apos;s budget
+                </span>
+                <span className="font-medium text-slate-200">
+                  ${ariaBudget.data.today.costUSD.toFixed(2)} / ${ariaBudget.data.limits.dailyUSD}
+                </span>
+              </div>
+              <div className="w-full bg-slate-700 rounded-full h-1.5">
+                <div
+                  className={cn(
+                    'h-1.5 rounded-full transition-all',
+                    ariaBudget.data.utilization.dailyPct > 80 ? 'bg-red-500' : 'bg-indigo-500'
+                  )}
+                  style={{ width: `${Math.min(ariaBudget.data.utilization.dailyPct, 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Agent summary */}
+          {ariaAgents.data && (
+            <div className="card p-3 mb-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-500">Agent status</span>
+                <span className={cn(
+                  'font-semibold',
+                  ariaAgents.data.some(a => a.status !== 'idle') ? 'text-blue-400' : 'text-green-400'
+                )}>
+                  {ariaAgents.data.some(a => a.status !== 'idle')
+                    ? `${ariaAgents.data.filter(a => a.status !== 'idle').length} active`
+                    : 'All idle'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Recent missions */}
+          <div className="space-y-2">
+            {ariaMissions.isLoading ? (
+              Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="card flex items-center gap-3">
+                  <div className="skeleton w-8 h-8 rounded-lg flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="skeleton h-3 w-32 rounded" />
+                    <div className="skeleton h-3 w-20 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : (ariaMissions.data || []).length === 0 ? (
+              <div className="card flex flex-col items-center justify-center py-6 text-center gap-2">
+                <Target className="w-6 h-6 text-slate-600" />
+                <p className="text-xs text-slate-500">No missions yet</p>
+                <Link href="/missions/new" className="text-xs text-indigo-400">Submit first mission</Link>
+              </div>
+            ) : (
+              (ariaMissions.data || []).map(m => (
+                <div key={m.id} className="card flex items-start gap-3 py-3">
+                  <div className={cn(
+                    'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                    m.status === 'completed' ? 'bg-green-900/50 border border-green-700/40' :
+                    m.status === 'running' ? 'bg-blue-900/50 border border-blue-700/40' :
+                    m.status === 'failed' ? 'bg-red-900/50 border border-red-700/40' :
+                    'bg-slate-800 border border-slate-700'
+                  )}>
+                    {m.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-400" /> :
+                     m.status === 'running' ? <Activity className="w-4 h-4 text-blue-400 animate-pulse" /> :
+                     <Clock className="w-4 h-4 text-slate-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-slate-300 truncate">{m.goal}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className={cn(
+                        'badge text-[10px]',
+                        m.status === 'completed' ? 'bg-green-900/40 text-green-400' :
+                        m.status === 'running' ? 'bg-blue-900/40 text-blue-400' :
+                        'bg-slate-700/60 text-slate-400'
+                      )}>
+                        {m.status}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-slate-600 flex-shrink-0">{timeAgo(m.created_at)}</span>
+                </div>
+              ))
+            )}
           </div>
         </section>
 

@@ -1,102 +1,74 @@
 import logging
-from openai import AsyncOpenAI
+import json
+import urllib.request
+import urllib.error
 from config import settings
 
 logger = logging.getLogger("openclaw")
 
-_client: AsyncOpenAI | None = None
+MODEL_ROUTER_URL = "http://model-router:3004"
 
 
-def get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        _client = AsyncOpenAI(
-            base_url=settings.llm_api_base_url,
-            api_key=settings.llm_api_key,
-        )
-    return _client
+def _call_model_router(messages: list, max_tokens: int = 2000) -> dict:
+    """Call the Carbon-Copy model-router via OpenAI-compatible endpoint."""
+    payload = json.dumps({
+        "model": settings.llm_model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+    }).encode()
+    req = urllib.request.Request(
+        f"{MODEL_ROUTER_URL}/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read())
+        content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        tokens = result.get("usage", {}).get("total_tokens", 0)
+        return {"content": content, "tokens_used": tokens}
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()
+        logger.error(f"Model router error {e.code}: {body}")
+        raise RuntimeError(f"LLM service error: {body}")
+    except Exception as e:
+        logger.error(f"Model router call failed: {e}")
+        raise RuntimeError(f"LLM service error: {e}")
 
 
 async def analyze_code(code: str, language: str) -> dict:
-    """
-    Analyze code for bugs, complexity issues, and improvement suggestions.
-
-    Returns:
-        dict with keys: analysis (str), tokens_used (int)
-    """
+    """Analyze code for bugs, complexity issues, and improvement suggestions."""
     system_prompt = (
         "You are an expert code reviewer and software architect. "
         "Analyze the provided code thoroughly and return a structured report covering:\n"
         "1. **Bugs & errors** — identify any logic bugs, off-by-one errors, null-pointer risks, etc.\n"
-        "2. **Security issues** — highlight any security vulnerabilities (injections, exposed secrets, etc.)\n"
-        "3. **Performance** — note any inefficiencies, N+1 queries, unnecessary allocations, etc.\n"
-        "4. **Code quality** — comment on readability, naming, complexity, and adherence to idioms.\n"
+        "2. **Security issues** — highlight any security vulnerabilities.\n"
+        "3. **Performance** — note any inefficiencies.\n"
+        "4. **Code quality** — comment on readability, naming, complexity.\n"
         "5. **Recommendations** — provide concrete, actionable improvement suggestions.\n"
         "Be specific and reference line numbers or patterns where possible."
     )
-
     user_prompt = f"Language: {language}\n\nCode to analyze:\n```{language}\n{code}\n```"
-
-    client = get_client()
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.2,
-        max_tokens=4096,
-    )
-
-    analysis = response.choices[0].message.content or ""
-    tokens_used = response.usage.total_tokens if response.usage else 0
-
-    return {"analysis": analysis, "tokens_used": tokens_used}
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    result = _call_model_router(messages, max_tokens=2000)
+    return {"analysis": result["content"], "tokens_used": result["tokens_used"]}
 
 
-async def generate_code(prompt: str, language: str, context: str | None = None) -> dict:
-    """
-    Generate code based on a natural-language prompt.
-
-    Returns:
-        dict with keys: code (str), explanation (str), tokens_used (int)
-    """
+async def generate_code(prompt: str, language: str) -> dict:
+    """Generate code from a natural language description."""
     system_prompt = (
-        f"You are an expert {language} developer. Generate clean, production-ready {language} code "
-        "based on the user's description. Follow language best practices and idioms.\n\n"
-        "Respond with a JSON object containing exactly two keys:\n"
-        '  "code": the complete code implementation\n'
-        '  "explanation": a brief explanation of what the code does and key design decisions\n\n'
-        "Return only the JSON — no markdown fences, no extra text."
+        f"You are an expert {language} developer. "
+        "Generate clean, well-documented, production-ready code based on the user's request. "
+        "Include inline comments explaining key logic. "
+        "Return only the code and brief inline documentation — no lengthy explanations outside the code."
     )
-
-    user_content = f"Task: {prompt}"
-    if context:
-        user_content += f"\n\nExisting context / codebase:\n```{language}\n{context}\n```"
-
-    client = get_client()
-    response = await client.chat.completions.create(
-        model=settings.llm_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_content},
-        ],
-        temperature=0.3,
-        max_tokens=4096,
-        response_format={"type": "json_object"},
-    )
-
-    import json
-    raw = response.choices[0].message.content or "{}"
-    tokens_used = response.usage.total_tokens if response.usage else 0
-
-    try:
-        parsed = json.loads(raw)
-        code = parsed.get("code", "")
-        explanation = parsed.get("explanation", "")
-    except json.JSONDecodeError:
-        logger.warning("LLM returned non-JSON response for generate_code, using raw content")
-        code = raw
-        explanation = ""
-
-    return {"code": code, "explanation": explanation, "tokens_used": tokens_used}
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": prompt},
+    ]
+    result = _call_model_router(messages, max_tokens=2000)
+    return {"code": result["content"], "tokens_used": result["tokens_used"]}

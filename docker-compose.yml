@@ -13,6 +13,7 @@ volumes:
   ollama-models:
   sandbox-tmp:
   vm-images:
+  aria-knowledge:
   # Homelab storage volumes
   immich-data:
   immich-model-cache:
@@ -102,6 +103,7 @@ services:
       VM_MANAGER_URL: "http://vm-manager:3003"
       MODEL_ROUTER_URL: "http://model-router:3004"
       SANDBOX_SERVICE_URL: "http://sandbox:3005"
+      ARIA_SERVICE_URL: "http://aria-service:3008"
       REDIS_URL: "redis://:${REDIS_PASSWORD}@redis:6379"
     depends_on:
       redis:
@@ -185,6 +187,7 @@ services:
       postgres:
         condition: service_healthy
       docker-proxy:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
       interval: 15s
@@ -205,13 +208,7 @@ services:
     networks:
       - carbon-net
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    # deploy GPU block removed for macOS — Ollama runs on CPU
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
       interval: 30s
@@ -447,6 +444,7 @@ services:
       postgres:
         condition: service_healthy
       docker-proxy:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3005/health"]
       interval: 15s
@@ -679,6 +677,7 @@ services:
   code-server:
     image: codercom/code-server:latest
     container_name: carbon-code-server
+    profiles: [code-server]  # disabled on ARM Mac - x86 only
     restart: unless-stopped
     networks:
       - carbon-net
@@ -695,6 +694,38 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+  # ─── ARIA Intelligence Service ────────────────────────────────────────────
+  aria-service:
+    build:
+      context: ./aria-service
+      dockerfile: Dockerfile
+    container_name: carbon-aria
+    <<: *node-common
+    expose:
+      - "3008"
+    environment:
+      PORT: "3008"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      MODEL_ROUTER_URL: "http://model-router:3004"
+      INTERNAL_SERVICE_TOKEN: "${INTERNAL_SERVICE_TOKEN}"
+      BUDGET_DAILY_USD: "${BUDGET_DAILY_USD:-50}"
+      BUDGET_MONTHLY_USD: "${BUDGET_MONTHLY_USD:-1000}"
+      RESEND_API_KEY: "${RESEND_API_KEY:-}"
+      KNOWLEDGE_VAULT_PATH: "/data/knowledge"
+    volumes:
+      - aria-knowledge:/data/knowledge
+    depends_on:
+      postgres:
+        condition: service_healthy
+      model-router:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3008/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   # ─── KVM Manager (QEMU/KVM Virtual Machines) ──────────────────────────────
   kvm-manager:
@@ -723,10 +754,7 @@ services:
       VM_VNC_PORT_START: "5900"
       VM_MAX_COUNT: "${VM_MAX_COUNT:-10}"
       HOST_IP: "${HOST_IP:-localhost}"
-    devices:
-      # KVM acceleration — only works on Linux hosts with hardware virtualisation
-      # Remove this block on macOS/Windows (falls back to software emulation)
-      - /dev/kvm:/dev/kvm
+    # devices block removed for macOS — falls back to software emulation
     volumes:
       - vm-images:/var/lib/carbon-vms
     depends_on:

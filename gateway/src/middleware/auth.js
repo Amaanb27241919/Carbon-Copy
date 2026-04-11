@@ -23,7 +23,6 @@ const authMiddleware = async (req, res, next) => {
   }
 
   const token = authHeader.slice(7);
-
   try {
     const response = await axios.get(`${AUTH_SERVICE_URL}/tokens/validate`, {
       headers: { Authorization: `Bearer ${token}` },

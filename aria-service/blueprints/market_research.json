@@ -1,0 +1,13 @@
+{
+  "id": "market_research",
+  "name": "market_research",
+  "category": "research",
+  "description": "Market sizing, trends, TAM/SAM/SOM analysis, growth drivers and headwinds",
+  "template": {
+    "sections": ["market_size", "tam_sam_som", "growth_drivers", "headwinds", "key_trends", "customer_segments", "entry_barriers", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "comprehensive"
+  },
+  "systemPrompt": "You are a market research expert. Provide rigorous, data-backed market analysis with realistic sizing estimates.",
+  "exampleGoal": "Size the {market_name} market and identify key growth drivers and headwinds"
+}

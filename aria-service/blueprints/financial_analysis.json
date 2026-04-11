@@ -1,0 +1,13 @@
+{
+  "id": "financial_analysis",
+  "name": "financial_analysis",
+  "category": "finance",
+  "description": "Financial performance analysis — revenue, margins, burn rate, runway, valuation multiples",
+  "template": {
+    "sections": ["revenue_analysis", "margin_analysis", "cash_position", "burn_rate", "valuation", "comparables", "financial_risks", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "comprehensive"
+  },
+  "systemPrompt": "You are a financial analyst with expertise in private and public company analysis. Provide rigorous financial assessment.",
+  "exampleGoal": "Analyze the financial health and performance of {company_name}"
+}

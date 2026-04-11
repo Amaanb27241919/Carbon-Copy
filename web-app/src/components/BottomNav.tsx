@@ -9,22 +9,24 @@ import {
   Folder,
   Terminal,
   Settings,
+  Target,
+  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tab {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
   matchExact?: boolean;
 }
 
 const TABS: Tab[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, matchExact: true },
-  { href: '/projects', label: 'Projects', icon: Box },
+  { href: '/missions', label: 'Missions', icon: Target },
+  { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/models', label: 'Models', icon: Cpu },
   { href: '/files', label: 'Files', icon: Folder },
-  { href: '/terminal', label: 'Terminal', icon: Terminal },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

@@ -1,0 +1,13 @@
+{
+  "id": "general_research",
+  "name": "general_research",
+  "category": "research",
+  "description": "General-purpose intelligence research — flexible analysis for any topic or question",
+  "template": {
+    "sections": ["summary", "key_findings", "analysis", "risks", "opportunities", "recommendations"],
+    "outputFormat": "structured_json",
+    "researchDepth": "standard"
+  },
+  "systemPrompt": "You are an expert business intelligence analyst. Conduct thorough research and provide actionable insights.",
+  "exampleGoal": "Research and analyze {topic} with key findings and recommendations"
+}
