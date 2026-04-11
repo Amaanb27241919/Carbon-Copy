@@ -1,6 +1,8 @@
-# Carbon-Copy — AI Cloud, Homelab & Storage Server
+# Carbon-Copy v2 — Self-Hosted AI Intelligence Platform
 
-A self-hosted, Docker-based platform that is simultaneously your AI cloud, homelab, and personal storage server. Runs on any OS. Controlled from iPhone or iPad.
+A self-hosted, Docker-based platform that is your AI cloud, intelligence platform, homelab, and data server in one. Runs on any machine. Controlled from iPhone or iPad.
+
+**Status:** v2.0 — Live as of April 11, 2026
 
 ---
 
@@ -8,244 +10,190 @@ A self-hosted, Docker-based platform that is simultaneously your AI cloud, homel
 
 | Capability | How |
 |---|---|
-| **ARIA Intelligence Platform** | 5-agent AI research system: scan, research, synthesis, delivery, client_mgr — run missions, monitor entities (WatchDog), manage document vaults (Dossier), and choose from 10 research blueprints |
-| **Run AI GitHub repos safely** | Sandbox clones & runs any repo in an isolated container with CPU/RAM/timeout limits |
-| **Host AI services** | OpenClaw (code intelligence) + NemoClaw (NLP) as microservices |
-| **Use any AI model** | Model router switches between Ollama (local), Claude, OpenAI, HuggingFace at runtime |
-| **Cloud + object storage** | MinIO (S3-compatible) + PostgreSQL with pgvector |
-| **Control from iPhone/iPad** | PWA installable from Safari — no App Store needed |
-| **Dev environment in browser** | VS Code (code-server) at `/code` |
-| **Container management** | VM Manager: start/stop/restart/inspect any container via API |
+| **ARIA Intelligence** | 5-agent AI research system — missions, WatchDog monitoring, Dossier document vault, 10 research blueprints |
+| **Multi-provider AI** | Model router switches between Ollama (local, no API key), Claude, OpenAI, HuggingFace at runtime |
+| **Safe GitHub sandbox** | Clone & run any AI repo in an isolated container with CPU/RAM/timeout limits |
+| **AI microservices** | OpenClaw (code intelligence) + NemoClaw (classify, summarize, embed) |
+| **Cloud + object storage** | MinIO (S3-compatible) + PostgreSQL 16 with pgvector |
+| **iPhone/iPad PWA** | Installable from Safari — no App Store, full control panel |
+| **Container management** | Start/stop/restart/inspect any container via API or web UI |
+| **VM management** | QEMU/KVM virtual machine lifecycle manager |
 | **Monitoring** | Prometheus + Grafana for all services |
-| **iPhone photo backup** | Immich — self-hosted Google Photos at `/photos` |
-| **Network file shares** | Samba — access files from iPhone Files app, Windows, macOS |
-| **File sync across devices** | Syncthing — continuous, peer-to-peer file sync |
-| **VPN remote access** | Tailscale — access everything from anywhere, no port forwarding |
-| **Ad blocking + local DNS** | Pi-hole — network-wide ad blocking |
-| **Dynamic DNS** | DuckDNS — keeps your home domain updated when your IP changes |
-| **Uptime dashboard** | Uptime Kuma — simple service status page at `/status` |
+| **iPhone photo backup** | Immich — self-hosted Google Photos |
+| **File sync** | Syncthing — peer-to-peer across all devices |
+| **VPN access** | Tailscale — reach everything from anywhere |
+| **Ad blocking + DNS** | Pi-hole — network-wide |
+| **Dynamic DNS** | DuckDNS — keeps your domain updated |
 
 ---
 
 ## Architecture
 
 ```
-                    ┌──────────────────────────────────────────────────────┐
-                    │               carbon-net (Docker bridge)              │
-                    │                                                        │
-iPhone/iPad/Browser │                                                        │
-  http://host/app ──┼──► web-app :3006  (Next.js PWA — iOS installable)   │
-  http://host/code ─┼──► code-server :8080  (VS Code in browser)           │
-  http://host/api  ─┼──► gateway :3000  ──► auth :3001                     │
-                    │         │                                              │
-                    │    ┌────┴───────────────────────────────────┐         │
-                    │    ├─ /api/openclaw  ──► openclaw  :8001    │         │
-                    │    ├─ /api/nemoclaw  ──► nemoclaw  :8002    │         │
-                    │    ├─ /api/data      ──► data-server :3002  │         │
-                    │    ├─ /api/vm        ──► vm-manager :3003   │         │
-                    │    ├─ /api/models    ──► model-router :3004 │         │
-                    │    ├─ /api/chat      ──► model-router :3004 │         │
-                    │    └─ /api/sandbox   ──► sandbox :3005      │         │
-                    │                                              │         │
-                    │  model-router ──► ollama :11434 (local)     │         │
-                    │               ──► OpenAI / Claude / HF APIs │         │
-                    │                                              │         │
-                    │  data-server ──► postgres :5432 (pgvector)  │         │
-                    │              ──► minio :9000  (S3 storage)  │         │
-                    │  auth        ──► redis :6379  (token cache) │         │
-                    │  vm-manager  ──► Docker Engine socket        │         │
-                    │  sandbox     ──► Docker Engine socket        │         │
-                    │  prometheus :9090 ◄── scrapes all services   │         │
-                    └──────────────────────────────────────────────────────┘
+iPhone/iPad/Browser
+  http://host/app  ──► nginx:80 ──► web-app:3006 (Next.js PWA)
+  http://host/api  ──► nginx:80 ──► gateway:3000 (JWT auth + routing)
+                                         │
+                    ┌────────────────────┼────────────────────────┐
+                    │                    │                         │
+               ARIA Intelligence    AI Services              Infrastructure
+               aria-service:3008   model-router:3004         data-server:3002
+               ├── missions         ├── ollama:11434           ├── postgres:5432
+               ├── watchdog         ├── claude API             ├── minio:9000
+               ├── dossier          ├── openai API             ├── redis:6379
+               └── blueprints       └── huggingface API        └── vm-manager:3003
+                                    openclaw:8001
+                                    nemoclaw:8002
+                                    sandbox:3005
 ```
 
 ---
 
 ## Services
 
-| Service | Port | Description |
-|---|---|---|
-| `nginx` | 80, 443 | Reverse proxy — only externally exposed service |
-| `gateway` | 3000 | API gateway: JWT auth, rate limiting, routing |
-| `auth` | 3001 | JWT login/refresh/logout, Redis token blocklist |
-| `data-server` | 3002 | PostgreSQL + MinIO: outputs, logs, file storage |
-| `vm-manager` | 3003 | Container start/stop/restart/stats (Dockerode) |
-| `model-router` | 3004 | Universal AI provider router |
-| `sandbox` | 3005 | Safe GitHub repo runner in isolated containers |
-| `web-app` | 3006 | Next.js PWA — iPhone/iPad control panel |
-| `kvm-manager` | 3007 | QEMU/KVM virtual machine lifecycle manager |
-| `aria-service` | 3008 | ARIA Intelligence Platform — missions, WatchDog, Dossier, Blueprints |
-| `openclaw` | 8001 | AI code analysis + generation (Python/FastAPI) |
-| `nemoclaw` | 8002 | AI classify + summarize + embed (Python/FastAPI) |
-| `ollama` | 11434 | Local LLM server (any model, GPU or CPU) |
-| `code-server` | 8080 | VS Code in browser |
-| `postgres` | 5432 | PostgreSQL 16 with pgvector |
-| `redis` | 6379 | Token blocklist + rate limit store |
-| `minio` | 9000/9001 | S3-compatible object storage + console |
-| `prometheus` | 9090 | Metrics scraper |
-| `grafana` | 3000 | Metrics dashboard |
-
----
-
----
-
-## ARIA Intelligence Platform
-
-Carbon-Copy v2 includes a built-in AI intelligence platform accessible from the Missions tab of the PWA.
-
-### Core Features
-
-| Feature | Description |
-|---|---|
-| **Missions** | Submit research goals to the 5-agent pipeline. ARIA scan → research → synthesize → deliver. |
-| **WatchDog** | Monitor companies, people, or topics for signal changes (funding, leadership, regulatory, news). |
-| **Dossier** | Upload documents — ARIA auto-summarizes and injects them as context into future missions. |
-| **Blueprints** | 10 built-in research templates: competitive analysis, M&A, market research, due diligence, and more. |
-| **Budget tracking** | Daily and monthly token/cost limits with utilization metrics in the dashboard. |
-
-### API Endpoints
-
-```bash
-# Submit a research mission
-curl -X POST http://localhost/api/missions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"clientId":"<uuid>","goal":"Analyse the competitive landscape for AI CRMs"}'
-
-# Get agent statuses
-curl http://localhost/api/agents -H "Authorization: Bearer $TOKEN"
-
-# Create a WatchDog monitor
-curl -X POST http://localhost/api/watchdog \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"clientId":"<uuid>","targetEntity":"Salesforce","signalTypes":["funding","product_launch"]}'
-
-# Browse blueprints
-curl http://localhost/api/blueprints -H "Authorization: Bearer $TOKEN"
-
-# Check budget
-curl http://localhost/api/aria-budget -H "Authorization: Bearer $TOKEN"
-```
-
-### 5-Agent Pipeline
-
-```
-Mission submitted
-      │
-      ▼
- [Scanner]       — classifies request type and priority
-      │
-      ▼
- [Researcher]    — runs AI-powered deep research via model-router
-      │
-      ▼
- [Synthesizer]   — formats output into structured JSON
-      │
-      ▼
- [Delivery]      — sends via email (Resend) or Slack webhook
-      │
-      ▼
- [Client Manager] — updates client knowledge vault
-```
-
-All AI calls route through the model-router — no direct Anthropic/OpenAI SDK calls.
+| Service | Port | Status | Description |
+|---|---|---|---|
+| `nginx` | 80, 443 | ✅ | Reverse proxy — only externally exposed |
+| `gateway` | 3000 | ✅ | JWT auth, rate limiting, routing |
+| `auth` | 3001 | ✅ | Login/refresh/logout + Redis token blocklist |
+| `data-server` | 3002 | ✅ | PostgreSQL + MinIO storage |
+| `vm-manager` | 3003 | ✅ | Docker container lifecycle |
+| `model-router` | 3004 | ✅ | Universal AI provider router |
+| `sandbox` | 3005 | ✅ | Safe GitHub repo runner |
+| `web-app` | 3006 | ✅ | Next.js PWA (iPhone/iPad) |
+| `kvm-manager` | 3007 | ✅ | QEMU/KVM virtual machine manager |
+| `aria-service` | 3008 | ✅ | ARIA intelligence platform |
+| `openclaw` | 8001 | ✅ | Code analysis + generation (Python/FastAPI) |
+| `nemoclaw` | 8002 | ✅ | NLP: classify, summarize, embed (Python/FastAPI) |
+| `ollama` | 11434 | ✅ | Local LLM server |
+| `postgres` | 5432 | ✅ | PostgreSQL 16 + pgvector |
+| `redis` | 6379 | ✅ | Token cache + rate limiting |
+| `minio` | 9000/9001 | ✅ | S3-compatible object storage |
+| `prometheus` | 9090 | ✅ | Metrics scraper |
+| `grafana` | 3001 | ✅ | Metrics dashboard |
 
 ---
 
 ## Quick Start
 
 ### Prerequisites
-- **Linux/macOS:** Docker + Docker Compose v2
-- **Windows:** Docker Desktop with WSL2 enabled
+- Docker + Docker Compose v2
+- macOS/Linux (ARM64 or x86)
 
 ### 1. Clone & configure
-
 ```bash
 git clone https://github.com/Amaanb27241919/Carbon-Copy.git
 cd Carbon-Copy
-```
-
-**Linux/macOS:**
-```bash
 bash scripts/generate-secrets.sh
 ```
 
-**Windows (PowerShell):**
-```powershell
-.\scripts\generate-secrets.ps1
+Add your AI API keys to `.env`:
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+HF_API_KEY=hf_...
+DEFAULT_PROVIDER=ollama   # or: claude | openai | huggingface
 ```
 
-This creates a `.env` file with randomised secrets. Open it and optionally set an LLM API key (not required — Ollama runs fully locally).
-
-### 2. Start all services
-
-**Linux/macOS:**
+### 2. Start
 ```bash
 bash scripts/start.sh
 ```
 
-**Windows:**
-```powershell
-.\scripts\start.ps1
-```
-
-Services start in order via health-check dependencies. Allow ~60 seconds on first run while images build.
-
 ### 3. Access
-
 | URL | What |
 |---|---|
 | `http://localhost/app` | iPhone/iPad PWA dashboard |
-| `http://localhost/code` | VS Code in browser |
-| `http://localhost/api/health` | API health check |
-| `http://localhost/auth/login` | Login endpoint |
+| `http://localhost:9001` | MinIO file console |
+| `http://localhost:9090` | Prometheus metrics |
+| `http://localhost:3001` | Grafana dashboards |
 
-**Default credentials:** `admin` / `changeme` — change immediately.
+**Default credentials:** `admin` / `changeme` — change immediately after first login.
 
-### 4. Install on iPhone or iPad
-
-1. Open `http://YOUR_SERVER_IP/app` in **Safari**
-2. Tap the **Share** button → **Add to Home Screen**
-3. Tap **Add** — Carbon Cloud installs as a full-screen app
+### 4. Install on iPhone
+1. Open `http://YOUR_SERVER_IP/app` in Safari
+2. Tap Share → Add to Home Screen
+3. Full-screen app, no App Store needed
 
 ---
 
-## iPhone / iPad App Tabs
+## ARIA Intelligence Platform
 
-| Tab | Features |
+Built-in 5-agent research system accessible from the **Missions** tab.
+
+### Agents
+| Agent | Role |
 |---|---|
-| **Dashboard** | Live health status of every service, system stats, recent AI outputs |
-| **Projects** | Manage running containers, launch any GitHub AI repo in the sandbox |
-| **Models** | Browse models by provider, switch active provider, built-in chat |
-| **Files** | MinIO file browser — upload, download, browse storage |
-| **Terminal** | Live container logs, container selector |
-| **Settings** | Switch AI provider, enter API keys, logout |
+| `scan` | Classify and prioritize the request |
+| `research` | Run AI research via model-router |
+| `synthesis` | Format and structure output |
+| `delivery` | Save to vault, email, Slack |
+| `client_mgr` | Update client memory |
+
+### Features
+- **Missions** — Submit research goals, track status, view outputs
+- **WatchDog** — Monitor companies/people for signals (news, funding, hiring, etc.)
+- **Dossier** — Upload documents, get AI summaries, inject context into missions
+- **Blueprints** — 10 research templates (competitive analysis, M&A, market research, etc.)
+- **Budget** — Daily/monthly spend tracking per client
+
+### API
+```bash
+# All routes require JWT (via gateway)
+GET  /api/agents          — agent status
+GET  /api/missions        — list missions
+POST /api/missions        — submit mission
+GET  /api/blueprints      — list templates
+GET  /api/watchdog        — list monitors
+POST /api/watchdog        — create monitor
+POST /api/dossier         — upload document
+GET  /api/aria-budget     — budget status
+GET  /api/clients         — list clients
+```
 
 ---
 
-## AI Models — Fully Local, No API Key Required
+## iPhone/iPad App — Navigation
 
-By default Carbon-Copy uses **Ollama** — runs entirely on your hardware.
+| Tab | What you get |
+|---|---|
+| **Dashboard** | Service health, system stats, ARIA summary, recent activity |
+| **Missions** | Submit + track ARIA research missions |
+| **Chat** | Streaming AI chat (Ollama/Claude/OpenAI) |
+| **Models** | Browse providers, pull Ollama models, switch default |
+| **Files** | MinIO file browser — upload, download, manage |
+| **Settings** | API keys, provider config, account |
 
+Additional pages (accessible from Dashboard):
+- **Agents** — Live ARIA agent status
+- **WatchDog** — Entity monitoring
+- **Dossier** — Document vault
+- **Blueprints** — Research templates
+- **Budget** — AI spend tracking
+- **Projects** — GitHub sandbox runner
+
+---
+
+## AI Models
+
+### Local (no API key needed)
 ```bash
-# Pull a model (Linux/macOS)
 bash scripts/add-model.sh llama3.2
 bash scripts/add-model.sh codellama
 bash scripts/add-model.sh mistral
 bash scripts/add-model.sh nomic-embed-text
-
-# Windows
-.\scripts\add-model.ps1 llama3.2
 ```
 
-**Switch to a cloud provider** — edit `.env` and restart:
+### Cloud providers
+Set in `.env`:
 ```env
-DEFAULT_PROVIDER=claude          # or: openai | huggingface
-ANTHROPIC_API_KEY=sk-ant-...
+DEFAULT_PROVIDER=claude    # ollama | openai | claude | huggingface
+ANTHROPIC_API_KEY=...
+OPENAI_API_KEY=...
+HF_API_KEY=...
 ```
 
-**Switch provider per-request** (no restart needed):
+Switch per-request (no restart):
 ```bash
 curl -X POST http://localhost/api/chat \
   -H "Authorization: Bearer $TOKEN" \
@@ -253,271 +201,62 @@ curl -X POST http://localhost/api/chat \
   -d '{"messages":[{"role":"user","content":"Hello"}],"provider":"claude"}'
 ```
 
-Supported providers: `ollama` · `openai` · `claude` · `huggingface`
-
 ---
 
-## Safe Sandbox — Run Any AI GitHub Repo
+## Database
 
+### Schemas
+- `01_schema.sql` — users, model_outputs, service_logs, container_events
+- `02_model_registry.sql` — model registry
+- `03_sandbox.sql` — sandbox runs
+- `04_vms.sql` — VM records
+- `05_aria.sql` — ARIA tables (missions, agents, clients, watchdog, dossier, blueprints, budget)
+
+### Connect directly
 ```bash
-curl -X POST http://localhost/api/sandbox/run \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "repoUrl": "https://github.com/user/some-ai-project",
-    "name": "my-experiment",
-    "cpuLimit": 1,
-    "memoryMb": 1024
-  }'
-```
-
-**Isolation per run:**
-- Fresh container — no state leakage between projects
-- CPU cap (default: 2 cores), RAM cap (default: 2 GB)
-- 30-minute timeout — auto force-killed
-- Auto-detects project type: Python, Node.js, Go, Rust, or custom Dockerfile
-- All runs recorded in PostgreSQL
-
----
-
-## API Reference
-
-### Login
-```bash
-curl -X POST http://localhost/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"admin","password":"changeme"}'
-# → { "accessToken": "eyJ...", "refreshToken": "eyJ..." }
-
-export TOKEN="eyJ..."
-```
-
-### OpenClaw — Code Intelligence
-```bash
-# Analyse code
-curl -X POST http://localhost/api/openclaw/analyze \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"code":"def fib(n): return fib(n-1)+fib(n-2)","language":"python"}'
-
-# Generate code
-curl -X POST http://localhost/api/openclaw/generate \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"prompt":"Write a Redis cache wrapper in Python","language":"python"}'
-```
-
-### NemoClaw — Language Intelligence
-```bash
-# Classify
-curl -X POST http://localhost/api/nemoclaw/classify \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"New GPU delivers 40% better perf","labels":["tech","finance","sports"]}'
-
-# Summarise
-curl -X POST http://localhost/api/nemoclaw/summarize \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"text":"Long article...","max_length":100,"style":"bullet-points"}'
-
-# Embed
-curl -X POST http://localhost/api/nemoclaw/embed \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"texts":["Hello world","Machine learning"]}'
-```
-
-### Container Management (admin only)
-```bash
-# List all carbon-* containers
-curl http://localhost/api/vm/containers -H "Authorization: Bearer $TOKEN"
-
-# Restart a service
-curl -X POST http://localhost/api/vm/containers/carbon-openclaw/restart \
-  -H "Authorization: Bearer $TOKEN"
-
-# Get logs
-curl "http://localhost/api/vm/containers/carbon-openclaw/logs?tail=50" \
-  -H "Authorization: Bearer $TOKEN"
+docker exec -it carbon-postgres psql -U carbon -d carbon_db
 ```
 
 ---
 
 ## Development
 
-### Edit code in the browser
-Open `http://localhost/code` — the full project is mounted at `/home/coder/carbon-copy`.
-
 ### Rebuild a single service
 ```bash
-bash scripts/deploy-project.sh openclaw   # Linux/macOS
+docker compose build --no-cache <service>
+docker compose up -d --force-recreate <service>
 ```
 
-### Add a new AI service
-1. Create `services/your-service/` following the openclaw or nemoclaw pattern
-2. Add it to `docker-compose.yml`
-3. Add a proxy route in `gateway/src/app.js`
-4. Add a scrape target in `monitoring/prometheus/prometheus.yml`
-
-### Database
+### View logs
 ```bash
-docker compose exec postgres psql -U carbon -d carbon_db
+docker logs carbon-aria --tail 50 -f
+docker logs carbon-gateway --tail 50 -f
 ```
+
+### Apply schema changes
+```bash
+docker exec -i carbon-postgres psql -U carbon -d carbon_db < database/init/05_aria.sql
+```
+
+See [CLAUDE.md](./CLAUDE.md) for the full development guide.
 
 ---
 
-## Directory Structure
+## Roadmap
 
-```
-carbon-copy/
-├── nginx/              Reverse proxy (routes /app, /code, /api/*)
-├── gateway/            API gateway — JWT, rate limiting, proxying
-├── auth/               Auth service (JWT + bcrypt + Redis blocklist)
-├── data-server/        Storage (PostgreSQL + MinIO)
-├── vm-manager/         Container lifecycle manager
-├── model-router/       Universal AI provider router
-│   └── providers/      openai.js · anthropic.js · ollama.js · huggingface.js
-├── sandbox/            Safe isolated GitHub repo runner
-├── web-app/            Next.js 14 PWA — iPhone/iPad control panel
-├── services/
-│   ├── openclaw/       Code analysis + generation (Python/FastAPI)
-│   ├── nemoclaw/       NLP: classify, summarise, embed (Python/FastAPI)
-│   └── ollama/         Local model server with GPU support
-├── database/init/      SQL schema migrations (auto-applied on first start)
-├── monitoring/         Prometheus scrape config + Grafana datasource
-└── scripts/
-    ├── start.sh / .ps1             Start all services
-    ├── stop.sh                     Stop all services
-    ├── generate-secrets.sh / .ps1  Generate .env with random secrets
-    ├── deploy-project.sh           Rebuild & restart one service
-    └── add-model.sh / .ps1         Pull an Ollama model
-```
+### In Progress
+- [ ] VM management UI (kvm-manager page)
+- [ ] System stats (outputs, storage, container count)
+- [ ] Files page (MinIO browser)
+- [ ] Chat streaming (rawclaw-chat pattern)
 
----
-
-## Environment Variables
-
-### Core Secrets (auto-generated)
-
-| Variable | Purpose |
-|---|---|
-| `JWT_SECRET` | Signs access tokens (15 min expiry) |
-| `JWT_REFRESH_SECRET` | Signs refresh tokens (7 day expiry) |
-| `INTERNAL_SERVICE_TOKEN` | Service-to-service authentication |
-| `POSTGRES_PASSWORD` | Database password |
-| `REDIS_PASSWORD` | Redis auth password |
-| `MINIO_SECRET_KEY` | Object storage secret |
-| `GRAFANA_PASSWORD` | Monitoring dashboard password |
-| `CODE_SERVER_PASSWORD` | VS Code browser access password |
-
-### AI Provider
-
-| Variable | Default | Notes |
-|---|---|---|
-| `DEFAULT_PROVIDER` | `ollama` | `ollama` \| `openai` \| `claude` \| `huggingface` |
-| `OPENAI_API_KEY` | _(blank)_ | Leave blank to disable OpenAI |
-| `ANTHROPIC_API_KEY` | _(blank)_ | Leave blank to disable Claude |
-| `HF_API_KEY` | _(blank)_ | Leave blank to use free HF tier |
-| `OLLAMA_DEFAULT_MODEL` | `llama3.2` | Default local model |
-| `OLLAMA_PRELOAD_MODELS` | `llama3.2` | Comma-separated models to pull on startup |
-
-### Sandbox
-
-| Variable | Default | Notes |
-|---|---|---|
-| `SANDBOX_CPU_LIMIT` | `2` | Max CPU cores per run |
-| `SANDBOX_MEMORY_MB` | `2048` | Max RAM per run |
-| `SANDBOX_TIMEOUT_MINUTES` | `30` | Auto-kill timeout |
-
----
-
----
-
-## Homelab + Storage
-
-### Start with homelab services
-
-```bash
-bash scripts/start-homelab.sh     # Linux/macOS
-.\scripts\start-homelab.ps1       # Windows
-```
-
-Homelab services use Docker Compose [profiles](https://docs.docker.com/compose/profiles/) so they don't run unless explicitly started.
-
-### Service map
-
-| URL | Service | What it does |
-|---|---|---|
-| `http://HOST/status` | Uptime Kuma | Is everything up? Simple status page |
-| `http://HOST/photos` | Immich | iPhone photo backup — like iCloud, self-hosted |
-| `http://HOST/sync` | Syncthing | File sync dashboard |
-| `http://HOST/dns` | Pi-hole | DNS + ad blocker admin |
-| `http://HOST:2283` | Immich (direct) | Mobile app endpoint |
-| `http://HOST:8384` | Syncthing (direct) | Sync config |
-
-### iPhone photo backup (Immich)
-
-1. Install the **Immich** app from the App Store
-2. Open it → tap **+** → enter `http://YOUR_HOST/photos` as the server URL
-3. Log in and enable **Background Backup** — your camera roll backs up automatically
-
-### Access files from iPhone (Samba)
-
-1. Open the **Files** app on iPhone
-2. Tap **...** (top right) → **Connect to Server**
-3. Enter `smb://YOUR_HOST_IP`
-4. Username: `carbon`, Password: `SAMBA_PASSWORD` from `.env`
-5. Your shared folders appear in Files alongside iCloud
-
-### Access files from Windows
-
-```
-\\YOUR_HOST_IP\shared
-\\YOUR_HOST_IP\ai-outputs
-\\YOUR_HOST_IP\photos
-```
-
-### VPN access from anywhere (Tailscale)
-
-1. Get a free auth key at [tailscale.com](https://login.tailscale.com/admin/settings/keys)
-2. Add it to `.env`: `TAILSCALE_AUTH_KEY=tskey-auth-...`
-3. Run `bash scripts/start-homelab.sh`
-4. Install Tailscale on your iPhone — Carbon-Copy appears as `carbon-copy` in your tailnet
-5. Access everything via `http://carbon-copy/app` from anywhere in the world
-
-### Dynamic DNS (DuckDNS)
-
-1. Create a free account at [duckdns.org](https://www.duckdns.org)
-2. Create a subdomain (e.g. `mycarbon`)
-3. Set in `.env`:
-   ```env
-   DUCKDNS_SUBDOMAIN=mycarbon
-   DUCKDNS_TOKEN=your-token
-   ```
-4. Your server is reachable at `mycarbon.duckdns.org` even when your home IP changes
-
-### Automated backups
-
-```bash
-bash scripts/backup.sh
-```
-
-Backs up PostgreSQL (gzipped SQL dump) and your `.env` (AES-256 encrypted) to `storage/backups/`. Keeps the last 7 backups. Schedule it with cron:
-
-```bash
-# Run backup every night at 2am
-0 2 * * * cd /path/to/carbon-copy && bash scripts/backup.sh
-```
-
-### Storage layout
-
-```
-storage/
-├── shared/       Samba share + Syncthing folder — all devices
-├── ai-outputs/   AI model outputs exported for access via Files app
-└── backups/      Automated database + config backups
-```
+### Planned
+- [ ] Claude Code agent (code tasks via sandboxed claude-code)
+- [ ] AI cost tracking (per-provider spend dashboard)
+- [ ] Settings page (API key management)
+- [ ] Skills library (ARIA reusable workflows)
+- [ ] Tailscale + DuckDNS (remote access)
+- [ ] Self-healing + auto-updates
 
 ---
 
@@ -525,8 +264,35 @@ storage/
 
 - `.env` is gitignored — never commit it
 - Run `generate-secrets.sh` before any deployment
-- Change the default admin password immediately after first start
-- `vm-manager` and `sandbox` APIs require `admin` role JWT
-- Sandbox containers are CPU/RAM capped and network-isolated at runtime
-- All inter-service traffic uses `INTERNAL_SERVICE_TOKEN` on the internal Docker network
-- Only `nginx` is exposed to the internet
+- Change default admin password immediately
+- Only `nginx` is exposed externally
+- Service-to-service auth via `INTERNAL_SERVICE_TOKEN`
+- Sandbox containers are CPU/RAM capped and network-isolated
+
+---
+
+## Directory Structure
+
+```
+carbon-copy/
+├── nginx/              Reverse proxy
+├── gateway/            API gateway (JWT, routing) ← ARIA routes added
+├── auth/               Auth service
+├── data-server/        PostgreSQL + MinIO
+├── vm-manager/         Docker container manager
+├── model-router/       Universal AI router (Ollama/Claude/OpenAI/HF)
+├── sandbox/            Safe GitHub repo runner
+├── aria-service/       ← NEW: ARIA intelligence platform
+│   ├── blueprints/     Research templates
+│   └── src/            orchestrator, watchdog, dossier, routes, services
+├── kvm-manager/        QEMU/KVM VM manager
+├── web-app/            Next.js PWA (iPhone/iPad)
+│   └── src/app/        Dashboard, Missions, Chat, Agents, WatchDog, Dossier, Blueprints, Budget
+├── services/
+│   ├── openclaw/       Code AI (Python/FastAPI)
+│   └── nemoclaw/       NLP AI (Python/FastAPI)
+├── database/init/      SQL schemas (01-05)
+├── monitoring/         Prometheus + Grafana
+├── docker-compose.yml
+└── scripts/            start, stop, generate-secrets, add-model
+```

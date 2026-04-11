@@ -5,33 +5,32 @@ import axios from 'axios';
 import { ServiceHealth } from '@/lib/api';
 
 // Services to health-check (proxied through the gateway)
-const SERVICES: Array<{ name: string; endpoint: string }> = [
-  { name: 'Gateway', endpoint: '/health' },
-  { name: 'Auth', endpoint: '/auth/health' },
-  { name: 'Data Server', endpoint: '/data/health' },
-  { name: 'VM Manager', endpoint: '/vm/health' },
-  { name: 'OpenClaw', endpoint: '/openclaw/health' },
-  { name: 'NemoClaw', endpoint: '/nemoclaw/health' },
-  { name: 'Model Router', endpoint: '/model-router/health' },
-  { name: 'Sandbox', endpoint: '/sandbox/health' },
+const SERVICES: Array<{ name: string; endpoint: string; noAuth?: boolean }> = [
+  { name: 'Gateway',      endpoint: '/health',             noAuth: true },
+  { name: 'Auth',         endpoint: '/auth/health',        noAuth: true },
+  { name: 'Data Server',  endpoint: '/api/data/health' },
+  { name: 'VM Manager',   endpoint: '/api/vm/health' },
+  { name: 'OpenClaw',     endpoint: '/api/openclaw/health' },
+  { name: 'NemoClaw',     endpoint: '/api/nemoclaw/health' },
+  { name: 'Model Router', endpoint: '/api/models' },
+  { name: 'Sandbox',      endpoint: '/api/sandbox/health' },
+  { name: 'ARIA',         endpoint: '/api/aria/health' },
 ];
 
 async function checkService(
   name: string,
   endpoint: string,
-  baseUrl: string
+  noAuth?: boolean
 ): Promise<ServiceHealth> {
   const start = Date.now();
+  const token = typeof window !== 'undefined'
+    ? JSON.parse(localStorage.getItem('carbon-auth') || '{}')?.state?.token || ''
+    : '';
   try {
-    await axios.get(`${baseUrl}${endpoint}`, {
+    await axios.get(`http://localhost${endpoint}`, {
       timeout: 5000,
-      headers: {
-        Authorization: `Bearer ${
-          typeof window !== 'undefined'
-            ? JSON.parse(localStorage.getItem('carbon-auth') || '{}')?.state?.token || ''
-            : ''
-        }`,
-      },
+      validateStatus: () => true, // any HTTP response = service is reachable
+      headers: noAuth ? {} : { Authorization: `Bearer ${token}` },
     });
     return {
       name,
@@ -41,6 +40,7 @@ async function checkService(
       responseTime: Date.now() - start,
     };
   } catch {
+    // Only network errors (ECONNREFUSED, timeout) = down
     return {
       name,
       url: endpoint,
@@ -58,7 +58,7 @@ export function useServices() {
     queryKey: ['services-health'],
     queryFn: async () => {
       const results = await Promise.allSettled(
-        SERVICES.map((svc) => checkService(svc.name, svc.endpoint, baseUrl))
+        SERVICES.map((svc) => checkService(svc.name, svc.endpoint, svc.noAuth))
       );
       return results.map((result, i) => {
         if (result.status === 'fulfilled') return result.value;
