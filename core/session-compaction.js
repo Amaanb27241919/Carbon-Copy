@@ -6,7 +6,7 @@
  * Prevents context rot for long-running agents.
  */
 
-import { logSystemAction, ActionTypes } from './audit-v2.js';
+const { logSystemAction, ActionTypes } = require('./audit-v2.js');
 
 const DEFAULT_CONFIG = {
   maxSessionRuns: 200,
@@ -20,13 +20,13 @@ const sessionStates = new Map();
 // DB registration
 let _clearSession = null;
 
-export function registerCompactionDb({ clearSession }) {
+function registerCompactionDb({ clearSession }) {
   _clearSession = clearSession;
 }
 
 // ── Session State Management ────────────────────────────────────────
 
-export function getOrCreateSessionState(agentId) {
+function getOrCreateSessionState(agentId) {
   if (!sessionStates.has(agentId)) {
     sessionStates.set(agentId, {
       agentId,
@@ -40,7 +40,7 @@ export function getOrCreateSessionState(agentId) {
   return sessionStates.get(agentId);
 }
 
-export function updateSessionState(agentId, sessionId, inputTokens) {
+function updateSessionState(agentId, sessionId, inputTokens) {
   const state = getOrCreateSessionState(agentId);
   state.sessionId = sessionId || state.sessionId;
   state.runCount++;
@@ -55,7 +55,7 @@ export function updateSessionState(agentId, sessionId, inputTokens) {
  * Determine if a session should be rotated.
  * Call this before each agent run.
  */
-export function shouldRotateSession(agentId, config = DEFAULT_CONFIG) {
+function shouldRotateSession(agentId, config = DEFAULT_CONFIG) {
   const state = getOrCreateSessionState(agentId);
   if (!state.sessionId) return { shouldRotate: false, reason: null, currentState: state };
 
@@ -79,7 +79,7 @@ export function shouldRotateSession(agentId, config = DEFAULT_CONFIG) {
 /**
  * Rotate a session — clears the session ID and resets counters.
  */
-export function rotateSession(agentId) {
+function rotateSession(agentId) {
   const state = getOrCreateSessionState(agentId);
   const oldSessionId = state.sessionId;
 
@@ -103,7 +103,7 @@ export function rotateSession(agentId) {
 
 // ── Stats ───────────────────────────────────────────────────────────
 
-export function getCompactionStats(agentId) {
+function getCompactionStats(agentId) {
   const state = getOrCreateSessionState(agentId);
   const config = DEFAULT_CONFIG;
   const ageHours = (Math.floor(Date.now() / 1000) - state.sessionStartedAt) / 3600;
@@ -123,6 +123,17 @@ export function getCompactionStats(agentId) {
   };
 }
 
-export function getAllCompactionStats() {
+function getAllCompactionStats() {
   return [...sessionStates.keys()].map(id => getCompactionStats(id));
 }
+
+
+module.exports = {
+  registerCompactionDb,
+  getOrCreateSessionState,
+  updateSessionState,
+  shouldRotateSession,
+  rotateSession,
+  getCompactionStats,
+  getAllCompactionStats,
+};

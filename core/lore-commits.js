@@ -6,7 +6,7 @@
  * Git trailers provide decision context for future agents.
  */
 
-import { execSync, spawnSync } from 'child_process';
+const { execSync, spawnSync } = require('child_process');
 
 // ── Format ──────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ import { execSync, spawnSync } from 'child_process';
  * @param {string} trailers.Tested - What was verified
  * @param {string} trailers.NotTested - Known gaps
  */
-export function formatLoreCommit(intent, trailers = {}) {
+function formatLoreCommit(intent, trailers = {}) {
   const lines = [intent.trim()];
 
   const hasTrailers = Object.values(trailers).some(v => v);
@@ -50,7 +50,7 @@ export function formatLoreCommit(intent, trailers = {}) {
 /**
  * Parse a Lore commit message back into intent + trailers.
  */
-export function parseLoreCommit(message) {
+function parseLoreCommit(message) {
   const lines = message.trim().split('\n');
   const intent = lines[0];
   const trailers = {};
@@ -76,7 +76,7 @@ export function parseLoreCommit(message) {
  * Create a Lore commit in a git repository.
  * Stages specified files and commits with the Lore format.
  */
-export function createLoreCommit(dir, files, intent, trailers = {}) {
+function createLoreCommit(dir, files, intent, trailers = {}) {
   const message = formatLoreCommit(intent, trailers);
 
   try {
@@ -104,7 +104,7 @@ export function createLoreCommit(dir, files, intent, trailers = {}) {
  * Generate a Lore-format commit message using Claude.
  * Analyzes the git diff and writes a WHY-focused intent.
  */
-export async function generateLoreCommit(dir, context = '') {
+async function generateLoreCommit(dir, context = '') {
   const { spawn } = await import('child_process');
 
   const diff = spawnSync('git', ['diff', '--staged'], { cwd: dir, stdio: 'pipe' }).stdout.toString();
@@ -147,10 +147,19 @@ Output ONLY the commit message, no explanation.`;
 
 const CONVENTIONAL_TYPES = ['feat', 'fix', 'docs', 'refactor', 'test', 'chore', 'perf', 'ci', 'build', 'revert'];
 
-export function formatConventionalCommit(type, scope, description, body = '', breaking = false) {
+function formatConventionalCommit(type, scope, description, body = '', breaking = false) {
   if (!CONVENTIONAL_TYPES.includes(type)) throw new Error(`Invalid type: ${type}. Use: ${CONVENTIONAL_TYPES.join(', ')}`);
   const scopePart = scope ? `(${scope})` : '';
   const breakingMark = breaking ? '!' : '';
   const header = `${type}${scopePart}${breakingMark}: ${description}`;
   return body ? `${header}\n\n${body}` : header;
 }
+
+
+module.exports = {
+  formatLoreCommit,
+  parseLoreCommit,
+  createLoreCommit,
+  generateLoreCommit,
+  formatConventionalCommit,
+};

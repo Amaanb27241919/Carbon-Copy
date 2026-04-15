@@ -6,9 +6,9 @@
  * and indexes them into the knowledge_docs SQLite table.
  */
 
-import { readdirSync, readFileSync, existsSync, statSync } from 'fs';
-import { join, relative, extname, basename } from 'path';
-import crypto from 'crypto';
+const { readdirSync, readFileSync, existsSync, statSync } = require('fs');
+const { join, relative, extname, basename } = require('path');
+const crypto = require('crypto');
 
 // Default source path
 const DEFAULT_SOURCE = '/Users/amaankhan/Desktop/OmniFlow/Raw/rawgrowth-os/knowledge';
@@ -17,7 +17,7 @@ const DEFAULT_SOURCE = '/Users/amaankhan/Desktop/OmniFlow/Raw/rawgrowth-os/knowl
 
 let _db = null;
 
-export function registerKnowledgeDb(db) {
+function registerKnowledgeDb(db) {
   _db = db;
 }
 
@@ -27,7 +27,7 @@ export function registerKnowledgeDb(db) {
  * Import all markdown files from a knowledge base directory.
  * Maps subdirectories to categories.
  */
-export function importKnowledgeBase(sourceDir = DEFAULT_SOURCE, options = {}) {
+function importKnowledgeBase(sourceDir = DEFAULT_SOURCE, options = {}) {
   if (!existsSync(sourceDir)) {
     return { imported: 0, skipped: 0, errors: [], error: `Source not found: ${sourceDir}` };
   }
@@ -78,7 +78,7 @@ export function importKnowledgeBase(sourceDir = DEFAULT_SOURCE, options = {}) {
 /**
  * Search imported knowledge docs.
  */
-export function searchKnowledge(query, category, limit = 10) {
+function searchKnowledge(query, category, limit = 10) {
   if (!_db) return [];
 
   try {
@@ -99,7 +99,7 @@ export function searchKnowledge(query, category, limit = 10) {
   }
 }
 
-export function getImportStatus() {
+function getImportStatus() {
   if (!_db) return { total: 0, by_category: {} };
   try {
     const total = _db.prepare('SELECT COUNT(*) as c FROM knowledge_docs').get()?.c || 0;
@@ -173,3 +173,11 @@ function upsertDoc(db, doc) {
       (@id, @category, @subcategory, @file_path, @title, @content, @keywords, @indexed_at)
   `).run(doc);
 }
+
+
+module.exports = {
+  registerKnowledgeDb,
+  importKnowledgeBase,
+  searchKnowledge,
+  getImportStatus,
+};

@@ -6,12 +6,12 @@
  * Skills are loaded as context into agent prompts when relevant.
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+const { readFileSync, existsSync } = require('fs');
+const { join } = require('path');
 
 // ── Skills Catalog ──────────────────────────────────────────────────
 
-export const SKILLS_CATALOG = [
+const SKILLS_CATALOG = [
   // ── Content & Copywriting ─────────────────────────────────────────
   { id: 'brand-voice',              category: 'content',  agents: ['quilly', 'larry'], triggers: ['brand voice', 'tone', 'style guide', 'writing style'] },
   { id: 'content-creation',         category: 'content',  agents: ['quilly'],          triggers: ['create content', 'write content', 'content piece', 'blog post', 'article'] },
@@ -97,15 +97,15 @@ export const SKILLS_CATALOG = [
 const skillsById = {};
 for (const skill of SKILLS_CATALOG) skillsById[skill.id] = skill;
 
-export function getSkill(id) { return skillsById[id] || null; }
-export function getAllSkills() { return SKILLS_CATALOG; }
-export function getSkillsByCategory(category) { return SKILLS_CATALOG.filter(s => s.category === category); }
-export function getSkillsByAgent(agentId) { return SKILLS_CATALOG.filter(s => s.agents.includes(agentId)); }
+function getSkill(id) { return skillsById[id] || null; }
+function getAllSkills() { return SKILLS_CATALOG; }
+function getSkillsByCategory(category) { return SKILLS_CATALOG.filter(s => s.category === category); }
+function getSkillsByAgent(agentId) { return SKILLS_CATALOG.filter(s => s.agents.includes(agentId)); }
 
 /**
  * Find relevant skills for a task description.
  */
-export function findRelevantSkills(taskDescription, limit = 5) {
+function findRelevantSkills(taskDescription, limit = 5) {
   const lower = taskDescription.toLowerCase();
   const scored = [];
 
@@ -121,7 +121,7 @@ export function findRelevantSkills(taskDescription, limit = 5) {
  * Load skill SKILL.md content from rawclaw-platform skills directory.
  * Returns skill documentation as a string for injecting into agent prompts.
  */
-export function loadSkillContent(skillId, skillsBasePath) {
+function loadSkillContent(skillId, skillsBasePath) {
   const defaultPath = '/Users/amaankhan/Desktop/OmniFlow/Raw/rawclaw-platform/skills/active';
   const basePath = skillsBasePath || defaultPath;
   const skillPath = join(basePath, skillId, 'SKILL.md');
@@ -138,7 +138,7 @@ export function loadSkillContent(skillId, skillsBasePath) {
  * Build a context string of relevant skills for a prompt.
  * Injects top N skill docs into agent context.
  */
-export function buildSkillContext(taskDescription, maxSkills = 3) {
+function buildSkillContext(taskDescription, maxSkills = 3) {
   const relevant = findRelevantSkills(taskDescription, maxSkills);
   const parts = [];
 
@@ -153,3 +153,15 @@ export function buildSkillContext(taskDescription, maxSkills = 3) {
     ? `# Relevant Skills\n\n${parts.join('\n\n---\n\n')}`
     : '';
 }
+
+
+module.exports = {
+  getSkill,
+  getAllSkills,
+  getSkillsByCategory,
+  getSkillsByAgent,
+  findRelevantSkills,
+  loadSkillContent,
+  buildSkillContext,
+  SKILLS_CATALOG,
+};

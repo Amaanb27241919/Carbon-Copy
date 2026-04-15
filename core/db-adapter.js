@@ -25,7 +25,7 @@ let _db = null;
 
 // ── Initialize ──────────────────────────────────────────────────────
 
-export async function initDb() {
+async function initDb() {
   if (_db) return _db;
 
   if (ADAPTER === 'postgres') {
@@ -38,7 +38,7 @@ export async function initDb() {
   return _db;
 }
 
-export function getDb() {
+function getDb() {
   if (!_db) throw new Error('DB not initialized. Call initDb() first.');
   return _db;
 }
@@ -200,7 +200,7 @@ function normalizeSql(sql, target) {
  * Apply v2 schema to PostgreSQL.
  * Runs all DDL from schema-v2.sql converted to PostgreSQL syntax.
  */
-export async function migrateV2Schema(db) {
+async function migrateV2Schema(db) {
   if (db.type !== 'postgres') {
     // SQLite: run the sqlite schema-v2.sql
     const { readFileSync, existsSync } = await import('fs');
@@ -394,3 +394,10 @@ CREATE TABLE IF NOT EXISTS cc_model_usage (
 CREATE INDEX IF NOT EXISTS idx_cc_model_usage_model ON cc_model_usage(model);
 CREATE INDEX IF NOT EXISTS idx_cc_model_usage_provider ON cc_model_usage(provider);
 `;
+
+
+module.exports = {
+  initDb,
+  getDb,
+  migrateV2Schema,
+};

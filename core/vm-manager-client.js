@@ -13,8 +13,8 @@
  * - Assign a VM to an AI agent for sandboxed execution
  */
 
-import { logSystemAction, logAgentAction, ActionTypes } from './audit-v2.js';
-import { execSync } from 'child_process';
+const { logSystemAction, logAgentAction, ActionTypes } = require('./audit-v2.js');
+const { execSync } = require('child_process');
 
 const KVM_URL = process.env.KVM_MANAGER_URL || 'http://localhost:3004';
 const SERVICE_TOKEN = process.env.SERVICE_TOKEN || 'internal-service-token';
@@ -30,7 +30,7 @@ const headers = () => ({
 /**
  * List all VMs.
  */
-export async function listVMs() {
+async function listVMs() {
   const res = await fetch(`${KVM_URL}/vms`, { headers: headers() });
   if (!res.ok) throw new Error(`listVMs failed: ${res.status}`);
   return res.json();
@@ -39,7 +39,7 @@ export async function listVMs() {
 /**
  * Get a single VM by ID.
  */
-export async function getVM(vmId) {
+async function getVM(vmId) {
   const res = await fetch(`${KVM_URL}/vms/${vmId}`, { headers: headers() });
   if (!res.ok) throw new Error(`getVM failed: ${res.status}`);
   return res.json();
@@ -56,7 +56,7 @@ export async function getVM(vmId) {
  * @param {string} [spec.description] - Optional description
  * @param {string} [spec.agentId] - AI agent requesting this VM
  */
-export async function createVM(spec, agentId = 'system') {
+async function createVM(spec, agentId = 'system') {
   const res = await fetch(`${KVM_URL}/vms`, {
     method: 'POST',
     headers: headers(),
@@ -81,7 +81,7 @@ export async function createVM(spec, agentId = 'system') {
  * @param {string} vmId
  * @param {boolean} bootFromIso - Boot from install ISO (for fresh installs)
  */
-export async function startVM(vmId, bootFromIso = false) {
+async function startVM(vmId, bootFromIso = false) {
   const res = await fetch(`${KVM_URL}/vms/${vmId}/start`, {
     method: 'POST',
     headers: headers(),
@@ -96,7 +96,7 @@ export async function startVM(vmId, bootFromIso = false) {
 /**
  * Stop a VM (graceful or forced).
  */
-export async function stopVM(vmId, force = false) {
+async function stopVM(vmId, force = false) {
   const res = await fetch(`${KVM_URL}/vms/${vmId}/stop`, {
     method: 'POST',
     headers: headers(),
@@ -111,7 +111,7 @@ export async function stopVM(vmId, force = false) {
 /**
  * Delete a VM (stops and removes disk).
  */
-export async function deleteVM(vmId) {
+async function deleteVM(vmId) {
   const res = await fetch(`${KVM_URL}/vms/${vmId}`, {
     method: 'DELETE',
     headers: headers(),
@@ -125,7 +125,7 @@ export async function deleteVM(vmId) {
 /**
  * List available OS presets for VM creation.
  */
-export async function getVMPresets() {
+async function getVMPresets() {
   const res = await fetch(`${KVM_URL}/vms/presets`, { headers: headers() });
   if (!res.ok) throw new Error(`getVMPresets failed: ${res.status}`);
   return res.json();
@@ -141,7 +141,7 @@ export async function getVMPresets() {
  * @param {string} agentId - Agent requesting the VM
  * @returns VM details including SSH connection info
  */
-export async function provisionAgentVM(spec, agentId = 'system') {
+async function provisionAgentVM(spec, agentId = 'system') {
   console.log(`[vm] Provisioning VM for agent ${agentId}: ${spec.name} (${spec.os})`);
 
   const vm = await createVM({ ...spec, description: `AI agent: ${agentId}` }, agentId);
@@ -169,7 +169,7 @@ export async function provisionAgentVM(spec, agentId = 'system') {
  * @param {string} agentId - Agent running the command
  * @param {number} timeout - Timeout in ms (default 30s)
  */
-export async function runOnVM(vmId, command, agentId = 'system', timeout = 30000) {
+async function runOnVM(vmId, command, agentId = 'system', timeout = 30000) {
   const vm = await getVM(vmId);
   if (!vm.running) throw new Error(`VM ${vmId} is not running`);
 
@@ -206,7 +206,7 @@ export async function runOnVM(vmId, command, agentId = 'system', timeout = 30000
  * @param {string} project.start - Start command (default: npm start)
  * @param {string} agentId - Agent deploying
  */
-export async function deployToVM(vmId, project, agentId = 'system') {
+async function deployToVM(vmId, project, agentId = 'system') {
   const { repo, branch = 'main', install = 'npm install', start = 'npm start' } = project;
 
   console.log(`[vm] Deploying ${repo} to VM ${vmId}`);
@@ -236,7 +236,7 @@ export async function deployToVM(vmId, project, agentId = 'system') {
  * Get AI-readable status summary of all VMs.
  * Useful for ARIA agents to understand infrastructure state.
  */
-export async function getVMStatusSummary() {
+async function getVMStatusSummary() {
   try {
     const { vms, kvm_available } = await listVMs();
     return {
@@ -258,3 +258,18 @@ export async function getVMStatusSummary() {
     return { kvm_available: false, total: 0, running: 0, stopped: 0, vms: [], error: 'KVM manager unavailable' };
   }
 }
+
+
+module.exports = {
+  listVMs,
+  getVM,
+  createVM,
+  startVM,
+  stopVM,
+  deleteVM,
+  getVMPresets,
+  provisionAgentVM,
+  runOnVM,
+  deployToVM,
+  getVMStatusSummary,
+};

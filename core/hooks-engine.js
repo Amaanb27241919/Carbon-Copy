@@ -6,8 +6,8 @@
  * Hooks can warn, block, transform, log, or notify on any event.
  */
 
-import crypto from 'crypto';
-import { logSystemAction, ActionTypes } from './audit-v2.js';
+const crypto = require('crypto');
+const { logSystemAction, ActionTypes } = require('./audit-v2.js');
 
 // ── Hook Registry ───────────────────────────────────────────────────
 
@@ -16,7 +16,7 @@ const hooksByEvent = new Map(); // eventType → Set<hookId>
 
 // ── Event Types ─────────────────────────────────────────────────────
 
-export const HookEvents = {
+const HookEvents = {
   PRE_MESSAGE:    'pre_message',
   POST_MESSAGE:   'post_message',
   PRE_TOOL:       'pre_tool',
@@ -31,7 +31,7 @@ export const HookEvents = {
 
 // ── Hook Actions ────────────────────────────────────────────────────
 
-export const HookActions = {
+const HookActions = {
   WARN:      'warn',      // Log a warning, allow to proceed
   BLOCK:     'block',     // Stop execution with a message
   TRANSFORM: 'transform', // Modify the input/output
@@ -53,7 +53,7 @@ export const HookActions = {
  * @param {boolean} config.enabled - Whether hook is active (default true)
  * @param {Function} config.handler - Custom handler function(context) → {allow, message, transform}
  */
-export function registerHook(eventType, pattern, action, config = {}) {
+function registerHook(eventType, pattern, action, config = {}) {
   const hookId = crypto.randomUUID();
 
   const hook = {
@@ -82,7 +82,7 @@ export function registerHook(eventType, pattern, action, config = {}) {
   return hookId;
 }
 
-export function removeHook(hookId) {
+function removeHook(hookId) {
   const hook = hooks.get(hookId);
   if (!hook) return false;
   hooks.delete(hookId);
@@ -91,17 +91,17 @@ export function removeHook(hookId) {
   return true;
 }
 
-export function enableHook(hookId) {
+function enableHook(hookId) {
   const hook = hooks.get(hookId);
   if (hook) hook.enabled = true;
 }
 
-export function disableHook(hookId) {
+function disableHook(hookId) {
   const hook = hooks.get(hookId);
   if (hook) hook.enabled = false;
 }
 
-export function listHooks(eventType) {
+function listHooks(eventType) {
   if (eventType) {
     return [...(hooksByEvent.get(eventType) || [])].map(id => hooks.get(id)).filter(Boolean);
   }
@@ -114,7 +114,7 @@ export function listHooks(eventType) {
  * Trigger all hooks for an event.
  * Returns { allowed, blocked_by, warnings, transforms }
  */
-export async function triggerHooks(eventType, context = {}) {
+async function triggerHooks(eventType, context = {}) {
   const eventHookIds = hooksByEvent.get(eventType) || new Set();
   const contextStr = JSON.stringify(context);
 
@@ -187,7 +187,7 @@ export async function triggerHooks(eventType, context = {}) {
  * Load hooks from a JSON config file.
  * Format: [{ event, pattern, action, name, message }]
  */
-export async function loadHooksFromConfig(configPath) {
+async function loadHooksFromConfig(configPath) {
   const { readFileSync, existsSync } = await import('fs');
   if (!existsSync(configPath)) return 0;
 
@@ -212,7 +212,7 @@ export async function loadHooksFromConfig(configPath) {
 /**
  * Register default Carbon Core hooks.
  */
-export function registerDefaultHooks() {
+function registerDefaultHooks() {
   // Block dangerous shell commands
   registerHook(HookEvents.PRE_TOOL, /rm\s+-rf\s+\/|rmdir\s+\/|mkfs\.|dd\s+if=|:(){ :|:& };:/, HookActions.BLOCK, {
     name: 'block-dangerous-commands',
@@ -239,3 +239,17 @@ export function registerDefaultHooks() {
 
   console.log('[hooks] Default hooks registered');
 }
+
+
+module.exports = {
+  registerHook,
+  removeHook,
+  enableHook,
+  disableHook,
+  listHooks,
+  triggerHooks,
+  loadHooksFromConfig,
+  registerDefaultHooks,
+  HookEvents,
+  HookActions,
+};

@@ -6,7 +6,7 @@
  * Use findBestAgent() to route tasks, buildAgentPrompt() to inject into runs.
  */
 
-export const EXPERT_AGENTS = {
+const EXPERT_AGENTS = {
 
   executor: {
     id: 'executor',
@@ -526,18 +526,18 @@ Expected perf after fixes.`,
 
 // ── Routing & Lookup ────────────────────────────────────────────────
 
-export function getExpertAgent(id) {
+function getExpertAgent(id) {
   return EXPERT_AGENTS[id] || null;
 }
 
-export function getAllExpertAgents() {
+function getAllExpertAgents() {
   return Object.values(EXPERT_AGENTS);
 }
 
 /**
  * Find the best expert agent for a task description.
  */
-export function findBestAgent(taskDescription) {
+function findBestAgent(taskDescription) {
   const lower = taskDescription.toLowerCase();
   const scores = {};
 
@@ -553,7 +553,16 @@ export function findBestAgent(taskDescription) {
 /**
  * Build a full prompt for an expert agent + task.
  */
-export function buildAgentPrompt(agentId, task, context = '') {
+function buildAgentPrompt(agentId, task, context = '') {
   const agent = EXPERT_AGENTS[agentId] || EXPERT_AGENTS['executor'];
   return `${agent.system_prompt}${context ? '\n\n' + context : ''}\n\n# Task\n\n${task}`;
 }
+
+
+module.exports = {
+  getExpertAgent,
+  getAllExpertAgents,
+  findBestAgent,
+  buildAgentPrompt,
+  EXPERT_AGENTS,
+};

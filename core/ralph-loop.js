@@ -9,10 +9,10 @@
  * Named after Ralph Wiggum (The Simpsons): persistent iteration despite setbacks.
  */
 
-import { spawn } from 'child_process';
-import crypto from 'crypto';
-import { logSystemAction, logAgentAction, ActionTypes } from './audit-v2.js';
-import { checkBudget, estimateCost } from './budget-v2.js';
+const { spawn } = require('child_process');
+const crypto = require('crypto');
+const { logSystemAction, logAgentAction, ActionTypes } = require('./audit-v2.js');
+const { checkBudget, estimateCost } = require('./budget-v2.js');
 
 const activeLoops = new Map(); // loopId → RalphLoopState
 
@@ -30,7 +30,7 @@ const activeLoops = new Map(); // loopId → RalphLoopState
  * @param {string} options.model - Claude model to use
  * @returns {{ loopId: string }} - Returns immediately with loop ID
  */
-export function startRalphLoop(task, options = {}) {
+function startRalphLoop(task, options = {}) {
   const loopId = crypto.randomUUID();
   const completionPromise = options.completionPromise || 'DONE';
   const maxIterations = options.maxIterations || 50;
@@ -179,11 +179,11 @@ function _runClaude(prompt, workDir, model, timeout = 10 * 60 * 1000) {
 
 // ── Query Functions ─────────────────────────────────────────────────
 
-export function getRalphStatus(loopId) {
+function getRalphStatus(loopId) {
   return activeLoops.get(loopId) || null;
 }
 
-export function stopRalphLoop(loopId) {
+function stopRalphLoop(loopId) {
   const state = activeLoops.get(loopId);
   if (!state) return false;
   state.status = 'cancelled';
@@ -193,10 +193,19 @@ export function stopRalphLoop(loopId) {
   return true;
 }
 
-export function getAllRalphLoops() {
+function getAllRalphLoops() {
   return [...activeLoops.values()].sort((a, b) => b.startedAt - a.startedAt);
 }
 
-export function getActiveRalphLoops() {
+function getActiveRalphLoops() {
   return [...activeLoops.values()].filter(l => l.status === 'running');
 }
+
+
+module.exports = {
+  startRalphLoop,
+  getRalphStatus,
+  stopRalphLoop,
+  getAllRalphLoops,
+  getActiveRalphLoops,
+};

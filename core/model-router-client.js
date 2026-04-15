@@ -8,9 +8,9 @@
  * - Per-provider cost tracking
  */
 
-import { checkBudget, estimateCost } from './budget-v2.js';
-import { executeWithHeartbeat } from './heartbeat-v2.js';
-import { logSystemAction, ActionTypes } from './audit-v2.js';
+const { checkBudget, estimateCost } = require('./budget-v2.js');
+const { executeWithHeartbeat } = require('./heartbeat-v2.js');
+const { logSystemAction, ActionTypes } = require('./audit-v2.js');
 
 const MODEL_ROUTER_URL = process.env.MODEL_ROUTER_URL || 'http://localhost:3002';
 
@@ -41,7 +41,7 @@ const PROVIDER_COST_FREE = new Set(['ollama', 'huggingface']);
  * @param {boolean} options.localFirst - Try Ollama before cloud (default: true)
  * @param {boolean} options.skipBudgetCheck - Skip budget enforcement (default: false)
  */
-export async function chat(messages, options = {}) {
+async function chat(messages, options = {}) {
   const agentId = options.agentId || 'model-router';
   const localFirst = options.localFirst !== false;
   const skipBudget = options.skipBudgetCheck === true;
@@ -111,7 +111,7 @@ export async function chat(messages, options = {}) {
 /**
  * Stream a chat response (returns async iterable).
  */
-export async function chatStream(messages, options = {}) {
+async function chatStream(messages, options = {}) {
   const provider = await resolveProvider(options.provider || 'auto', options.localFirst !== false);
   const model = options.model || PROVIDER_MODELS[provider];
 
@@ -128,7 +128,7 @@ export async function chatStream(messages, options = {}) {
 /**
  * Embed text using the model router.
  */
-export async function embed(text, options = {}) {
+async function embed(text, options = {}) {
   const provider = options.provider || 'ollama'; // Ollama for local embeddings
   const model = options.model || 'nomic-embed-text';
 
@@ -145,7 +145,7 @@ export async function embed(text, options = {}) {
 /**
  * List all available providers and their status.
  */
-export async function getProviders() {
+async function getProviders() {
   const response = await fetch(`${MODEL_ROUTER_URL}/providers`);
   if (!response.ok) return { providers: [] };
   return response.json();
@@ -154,7 +154,7 @@ export async function getProviders() {
 /**
  * List models available on Ollama (local).
  */
-export async function getLocalModels() {
+async function getLocalModels() {
   const response = await fetch(`${MODEL_ROUTER_URL}/models?provider=ollama`);
   if (!response.ok) return { models: [] };
   return response.json();
@@ -163,7 +163,7 @@ export async function getLocalModels() {
 /**
  * Pull a model into Ollama (local).
  */
-export async function pullLocalModel(modelName) {
+async function pullLocalModel(modelName) {
   const response = await fetch(`${MODEL_ROUTER_URL}/models/pull`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -220,3 +220,13 @@ async function callModelRouter(provider, model, messages, options) {
 
   return response.json();
 }
+
+
+module.exports = {
+  chat,
+  chatStream,
+  embed,
+  getProviders,
+  getLocalModels,
+  pullLocalModel,
+};

@@ -1,37 +1,65 @@
+'use strict';
+
 /**
- * Carbon Core v2 — API Server Entry Point
- *
- * Extends api-server.js with all v2 services:
- * - Budget governance
- * - Heartbeat execution tracking
- * - Activity audit log
- * - Health monitoring
- * - Multi-agent orchestration
- * - Claude usage tracking
- * - Proposal generation
- * - Real-time SSE hive mind feed
+ * Carbon Core v3 — API Server Entry Point
  */
 
-import express from 'express';
-import cors from 'cors';
-import Database from 'better-sqlite3';
-import path from 'path';
-import { fileURLToPath } from 'url';
+const express = require('express');
+const cors = require('cors');
+const Database = require('better-sqlite3');
+const fs = require('fs');
+const path = require('path');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const {
+  registerBudgetDb, initBudgetPolicies,
+  getBudgetDashboard, getAgentBudgetSummary,
+  createBudgetPolicy, resumeAgent, pauseAgent,
+} = require('./core/budget-v2.js');
 
-// ── V2 Services ─────────────────────────────────────────────────────
+const {
+  registerHeartbeatDb, resetStuckRuns,
+  getRecentRuns, getActiveRuns, getTotalRuns, getAgentStats,
+} = require('./core/heartbeat-v2.js');
 
-import { registerBudgetDb, initBudgetPolicies } from './core/budget-v2.js';
-import { registerHeartbeatDb, resetStuckRuns } from './core/heartbeat-v2.js';
-import { registerAuditDb, logSystemAction, ActionTypes } from './core/audit-v2.js';
-import { registerHealthDb, startHealthMonitor } from './core/health-v2.js';
-import { createDashboardV2Router } from './dashboard-v2.js';
-import { initDb, migrateV2Schema } from './core/db-adapter.js';
-import { getVMStatusSummary } from './core/vm-manager-client.js';
-import { getProviders, getLocalModels } from './core/model-router-client.js';
+const {
+  registerAuditDb, logSystemAction, logAgentAction,
+  getRecentActivity, getActivityByEntity, getActivityByActor,
+  getActivityCount, ActionTypes,
+} = require('./core/audit-v2.js');
 
-// ── App Setup ───────────────────────────────────────────────────────
+const {
+  registerHealthDb, startHealthMonitor, getHealthStatus,
+} = require('./core/health-v2.js');
+
+const {
+  scanUsage, getTotalUsageStats: getUsageSummary, getTotalUsageStats: _usageStats,
+} = require('./core/usage-tracker.js');
+const getUsageWindow = (days) => {
+  try {
+    const sessions = scanUsage() || [];
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const cutoffStr = cutoff.toISOString().slice(0,10);
+    const filtered = sessions.filter(s => (s.last_timestamp || '') >= cutoffStr);
+    return { period_days: days, sessions: filtered.length,
+      turns: filtered.reduce((s,r) => s + (r.turn_count||0), 0),
+      cost_usd: filtered.reduce((s,r) => s + (r.cost_usd||0), 0) };
+  } catch { return { period_days: days, sessions: 0, turns: 0, cost_usd: 0 }; }
+};
+
+const {
+  orchestrate, orchestratePhased,
+  getAllOrchestrationRuns, getOrchestrationRun,
+} = require('./core/orchestrator-v2.js');
+
+const { generateProposal } = require('./core/proposal-service.js');
+const { getVMStatusSummary } = require('./core/vm-manager-client.js');
+const { getProviders, getLocalModels } = require('./core/model-router-client.js');
+const { getAllExpertAgents, findBestAgent } = require('./core/expert-agents.js');
+const { startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops } = require('./core/ralph-loop.js');
+const { listHooks, registerHook, registerDefaultHooks, triggerHooks } = require('./core/hooks-engine.js');
+
+// ── App Setup ────────────────────────────────────────────────────────
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -41,33 +69,33 @@ app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// ── Database ────────────────────────────────────────────────────────
+// ── Database (SQLite dev default) ────────────────────────────────────
 
-const db = new Database('./carbon-copy.db');
+const DB_PATH = process.env.SQLITE_PATH || path.join(__dirname, 'carbon-copy.db');
+const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 // Apply v2 schema
 try {
-  const { readFileSync } = await import('fs');
-  const schemaSql = readFileSync('./schema-v2.sql', 'utf-8');
-  db.exec(schemaSql);
-  console.log('[db] V2 schema applied');
+  const schemaPath = path.join(__dirname, 'schema-v2.sql');
+  if (fs.existsSync(schemaPath)) {
+    db.exec(fs.readFileSync(schemaPath, 'utf-8'));
+    console.log('[db] Schema applied:', DB_PATH);
+  }
 } catch (e) {
-  console.warn('[db] Schema apply warning:', e.message);
+  console.warn('[db] Schema warning:', e.message);
 }
 
-// ── Register DB Functions ───────────────────────────────────────────
+// ── Register DB Functions ─────────────────────────────────────────────
 
-// Budget
 registerBudgetDb({
   getSpend: (agentId, windowSeconds) => {
     try {
-      const row = db.prepare(`
-        SELECT COALESCE(SUM(cost_usd), 0) as total 
-        FROM heartbeat_runs 
-        WHERE agent_id = ? AND started_at > (strftime('%s', 'now') - ?)
-      `).get(agentId, windowSeconds);
+      const row = db.prepare(
+        `SELECT COALESCE(SUM(cost_usd), 0) as total FROM heartbeat_runs
+         WHERE agent_id = ? AND started_at > (strftime('%s','now') - ?)`
+      ).get(agentId, windowSeconds);
       return row?.total || 0;
     } catch { return 0; }
   },
@@ -77,130 +105,226 @@ registerBudgetDb({
   },
 });
 
-// Heartbeat
 const insertRun = db.prepare(`
-  INSERT OR IGNORE INTO heartbeat_runs 
-    (id, agent_id, invocation_source, status, prompt_preview, input_tokens, output_tokens, cache_tokens, cost_usd, duration_ms, exit_code, session_id_before, session_id_after, error, model, started_at, completed_at)
-  VALUES (@id, @agent_id, @invocation_source, @status, @prompt_preview, @input_tokens, @output_tokens, @cache_tokens, @cost_usd, @duration_ms, @exit_code, @session_id_before, @session_id_after, @error, @model, @started_at, @completed_at)
+  INSERT OR IGNORE INTO heartbeat_runs
+    (id, agent_id, invocation_source, status, prompt_preview,
+     input_tokens, output_tokens, cache_tokens, cost_usd, duration_ms,
+     exit_code, session_id_before, session_id_after, error, model, started_at, completed_at)
+  VALUES
+    (@id, @agent_id, @invocation_source, @status, @prompt_preview,
+     @input_tokens, @output_tokens, @cache_tokens, @cost_usd, @duration_ms,
+     @exit_code, @session_id_before, @session_id_after, @error, @model, @started_at, @completed_at)
 `);
 const updateRun = db.prepare(`
-  UPDATE heartbeat_runs SET status=@status, input_tokens=@input_tokens, output_tokens=@output_tokens, cache_tokens=@cache_tokens, cost_usd=@cost_usd, duration_ms=@duration_ms, exit_code=@exit_code, session_id_after=@session_id_after, error=@error, completed_at=@completed_at
+  UPDATE heartbeat_runs
+  SET status=@status, input_tokens=@input_tokens, output_tokens=@output_tokens,
+      cache_tokens=@cache_tokens, cost_usd=@cost_usd, duration_ms=@duration_ms,
+      exit_code=@exit_code, session_id_after=@session_id_after, error=@error, completed_at=@completed_at
   WHERE id=@id
 `);
 registerHeartbeatDb({ insertRun: (r) => insertRun.run(r), updateRun: (r) => updateRun.run(r) });
 
-// Audit
 const insertActivity = db.prepare(`
-  INSERT OR IGNORE INTO activity_log (id, actor_type, actor_id, action_type, entity_type, entity_id, detail, created_at)
-  VALUES (@id, @actor_type, @actor_id, @action_type, @entity_type, @entity_id, @detail, @created_at)
+  INSERT OR IGNORE INTO activity_log
+    (id, actor_type, actor_id, action_type, entity_type, entity_id, detail, created_at)
+  VALUES
+    (@id, @actor_type, @actor_id, @action_type, @entity_type, @entity_id, @detail, @created_at)
 `);
 registerAuditDb({ insertActivity: (e) => insertActivity.run({ ...e, detail: JSON.stringify(e.detail) }) });
 
-// Health
 registerHealthDb({
   getDbTableNames: () => db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name),
   getMemoryCount: () => { try { return db.prepare('SELECT COUNT(*) as c FROM memories').get()?.c || 0; } catch { return 0; } },
   getTaskCount: () => { try { return db.prepare("SELECT COUNT(*) as c FROM scheduled_tasks WHERE status='active'").get()?.c || 0; } catch { return 0; } },
 });
 
-// ── Startup Tasks ───────────────────────────────────────────────────
-
-// Init database (SQLite dev, PostgreSQL prod)
-const coreDb = await initDb();
-await migrateV2Schema(coreDb);
+// ── Startup ───────────────────────────────────────────────────────────
 
 resetStuckRuns();
 initBudgetPolicies();
-startHealthMonitor(5 * 60 * 1000); // 5 min interval
+startHealthMonitor(5 * 60 * 1000);
+registerDefaultHooks();
 
-logSystemAction(ActionTypes.SYSTEM_STARTUP, 'system', 'api-server-v2', {
-  version: '2.0.0',
-  port: PORT,
-  node_version: process.version,
+logSystemAction(ActionTypes.SYSTEM_STARTUP, 'system', 'carbon-core', {
+  version: '3.0.0', port: PORT, node: process.version,
 });
 
-// ── Routes ──────────────────────────────────────────────────────────
+// ── SSE Clients (hive mind feed) ──────────────────────────────────────
 
-// V2 Dashboard API
-app.use('/api/v2', createDashboardV2Router());
+const sseClients = new Set();
+function broadcast(event) {
+  const data = JSON.stringify({ ...event, ts: Date.now() });
+  for (const res of sseClients) {
+    try { res.write(`data: ${data}\n\n`); }
+    catch { sseClients.delete(res); }
+  }
+}
 
-// Status
+// ── Routes ────────────────────────────────────────────────────────────
+
+// Ping
 app.get('/api/v2/ping', (req, res) => res.json({ ok: true, version: '3.0.0', ts: Date.now() }));
 
-// VM status summary
+// Health
+app.get('/api/v2/health', async (req, res) => {
+  try { res.json(await getHealthStatus()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Summary
+app.get('/api/v2/summary', async (req, res) => {
+  try {
+    const health = await getHealthStatus().catch(() => ({ status: 'unknown' }));
+    res.json({
+      version: '3.0.0',
+      health: health.status,
+      active_runs: getActiveRuns().length,
+      total_runs: getTotalRuns(),
+      activity_count: getActivityCount(),
+      budget: getBudgetDashboard(),
+      usage_7d: getUsageWindow(7),
+      recent_activity: getRecentActivity(5),
+      ts: Date.now(),
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Budget
+app.get('/api/v2/budget', (req, res) => res.json(getBudgetDashboard()));
+app.get('/api/v2/budget/:agentId', (req, res) => res.json(getAgentBudgetSummary(req.params.agentId)));
+app.post('/api/v2/budget/policy', (req, res) => {
+  const { scope, scope_id, window, limit_usd, warning_threshold, auto_pause } = req.body;
+  if (!scope || !scope_id || !window || !limit_usd)
+    return res.status(400).json({ error: 'scope, scope_id, window, limit_usd required' });
+  res.json(createBudgetPolicy(scope, scope_id, window, limit_usd, { warningThreshold: warning_threshold, autoPause: auto_pause }));
+});
+app.post('/api/v2/budget/:agentId/pause', (req, res) => { pauseAgent(req.params.agentId); res.json({ ok: true }); });
+app.post('/api/v2/budget/:agentId/resume', (req, res) => { resumeAgent(req.params.agentId); res.json({ ok: true }); });
+
+// Heartbeat
+app.get('/api/v2/heartbeat', (req, res) => res.json({
+  runs: getRecentRuns(parseInt(req.query.limit) || 50, req.query.agent_id),
+  active: getActiveRuns(), total: getTotalRuns(),
+}));
+app.get('/api/v2/heartbeat/stats/:agentId', (req, res) => res.json(getAgentStats(req.params.agentId)));
+
+// Activity
+app.get('/api/v2/activity', (req, res) => {
+  const limit = parseInt(req.query.limit) || 50;
+  const entries = req.query.entity_type ? getActivityByEntity(req.query.entity_type, limit)
+    : req.query.actor_id ? getActivityByActor(req.query.actor_id, limit)
+    : getRecentActivity(limit, parseInt(req.query.offset) || 0);
+  res.json({ entries, total: getActivityCount() });
+});
+
+// Orchestration
+app.get('/api/v2/orchestration', (req, res) => res.json(getAllOrchestrationRuns({ limit: parseInt(req.query.limit) || 20 })));
+app.get('/api/v2/orchestration/:runId', (req, res) => {
+  const run = getOrchestrationRun(req.params.runId);
+  return run ? res.json(run) : res.status(404).json({ error: 'Run not found' });
+});
+app.post('/api/v2/orchestration', (req, res) => {
+  const { task, agents, mode, options, userId } = req.body;
+  if (!task) return res.status(400).json({ error: 'task required' });
+  const result = mode === 'phased'
+    ? orchestratePhased({ task, options, userId })
+    : orchestrate({ task, agents: agents || [], mode: mode || 'parallel', options, userId });
+  res.json(result);
+});
+
+// Usage
+app.get('/api/v2/usage', (req, res) => { try { res.json(getUsageSummary()); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.get('/api/v2/usage/window', (req, res) => { try { res.json(getUsageWindow(parseInt(req.query.days) || 7)); } catch (e) { res.status(500).json({ error: e.message }); } });
+
+// Proposals
+app.post('/api/v2/proposal', async (req, res) => {
+  if (!req.body.transcript) return res.status(400).json({ error: 'transcript required' });
+  try { res.json(await generateProposal(req.body.lead_data || {}, req.body.transcript)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// VMs
 app.get('/api/v2/vms', async (req, res) => {
   try { res.json(await getVMStatusSummary()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Model router provider status
+// Models
 app.get('/api/v2/models/providers', async (req, res) => {
   try { res.json(await getProviders()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
-
-// Local models (Ollama)
 app.get('/api/v2/models/local', async (req, res) => {
   try { res.json(await getLocalModels()); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Try to import and mount v1 API if it exists ──────────────────────
-try {
-  const { createApiRouter } = await import('./api-server.js').catch(() => null);
-  if (createApiRouter) {
-    app.use('/api', createApiRouter(db));
-    console.log('[api] V1 routes mounted at /api');
-  }
-} catch { console.log('[api] V1 routes not available (standalone v2 mode)'); }
+// Expert Agents
+app.get('/api/v2/agents/expert', (req, res) => res.json(getAllExpertAgents()));
+app.post('/api/v2/agents/route', (req, res) => {
+  if (!req.body.task) return res.status(400).json({ error: 'task required' });
+  res.json(findBestAgent(req.body.task));
+});
 
-// ── ARIA Integration ─────────────────────────────────────────────────
-// Forward /api/aria/* to running ARIA orchestrator if configured
-const ARIA_URL = process.env.ARIA_SERVICE_URL;
-if (ARIA_URL) {
-  console.log(`[aria] Proxying /api/aria/* → ${ARIA_URL}`);
-  app.all('/api/aria/*', async (req, res) => {
-    try {
-      const { default: fetch } = await import('node-fetch');
-      const url = `${ARIA_URL}${req.path.replace('/api/aria', '')}`;
-      const response = await fetch(url, {
-        method: req.method,
-        headers: { 'Content-Type': 'application/json', ...req.headers },
-        body: ['POST', 'PUT', 'PATCH'].includes(req.method) ? JSON.stringify(req.body) : undefined,
-      });
-      const data = await response.json();
-      res.status(response.status).json(data);
-    } catch (e) {
-      res.status(502).json({ error: e.message });
-    }
-  });
-}
+// Ralph Loop
+app.post('/api/v2/ralph', (req, res) => {
+  if (!req.body.task) return res.status(400).json({ error: 'task required' });
+  res.json(startRalphLoop(req.body.task, req.body));
+});
+app.get('/api/v2/ralph', (req, res) => res.json(getAllRalphLoops()));
+app.get('/api/v2/ralph/:loopId', (req, res) => {
+  const loop = getRalphStatus(req.params.loopId);
+  return loop ? res.json(loop) : res.status(404).json({ error: 'Loop not found' });
+});
+app.delete('/api/v2/ralph/:loopId', (req, res) => {
+  const ok = stopRalphLoop(req.params.loopId);
+  res.json({ ok });
+});
 
-// ── Error Handler ────────────────────────────────────────────────────
+// Hooks
+app.get('/api/v2/hooks', (req, res) => res.json(listHooks(req.query.event)));
+app.post('/api/v2/hooks', (req, res) => {
+  const { event, pattern, action, name, message } = req.body;
+  if (!event || !action) return res.status(400).json({ error: 'event and action required' });
+  const hookId = registerHook(event, pattern || null, action, { name, message });
+  res.json({ hookId });
+});
+
+// SSE: Real-time hive mind feed
+app.get('/api/v2/stream', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders();
+  res.write(`data: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
+  sseClients.add(res);
+  req.on('close', () => sseClients.delete(res));
+});
+
+// ── Error Handler ──────────────────────────────────────────────────────
 
 app.use((err, req, res, next) => {
   console.error('[error]', err.message);
-  logSystemAction(ActionTypes.SYSTEM_ERROR, 'api', req.path, { error: err.message });
   res.status(500).json({ error: err.message });
 });
 
-// ── Start ────────────────────────────────────────────────────────────
+// ── Start ──────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
-  console.log('\n' + '═'.repeat(50));
-  console.log('  🧠 Carbon Core v2 — Running');
-  console.log('═'.repeat(50));
-  console.log(`  Port:         ${PORT}`);
-  console.log(`  Health:       http://localhost:${PORT}/api/v2/health`);
-  console.log(`  Dashboard:    http://localhost:${PORT}/api/v2/summary`);
-  console.log(`  Budget:       http://localhost:${PORT}/api/v2/budget`);
-  console.log(`  Heartbeat:    http://localhost:${PORT}/api/v2/heartbeat`);
-  console.log(`  Activity:     http://localhost:${PORT}/api/v2/activity`);
-  console.log(`  Usage:        http://localhost:${PORT}/api/v2/usage`);
-  console.log(`  Orchestrate:  POST http://localhost:${PORT}/api/v2/orchestration`);
-  console.log(`  Proposals:    POST http://localhost:${PORT}/api/v2/proposal`);
-  console.log(`  SSE Feed:     http://localhost:${PORT}/api/v2/stream`);
-  console.log('═'.repeat(50) + '\n');
+  console.log('\n' + '═'.repeat(52));
+  console.log('  🧠 Carbon Core v3 — Running');
+  console.log('═'.repeat(52));
+  console.log(`  Port:     ${PORT}`);
+  console.log(`  Ping:     http://localhost:${PORT}/api/v2/ping`);
+  console.log(`  Health:   http://localhost:${PORT}/api/v2/health`);
+  console.log(`  Summary:  http://localhost:${PORT}/api/v2/summary`);
+  console.log(`  Budget:   http://localhost:${PORT}/api/v2/budget`);
+  console.log(`  VMs:      http://localhost:${PORT}/api/v2/vms`);
+  console.log(`  Agents:   http://localhost:${PORT}/api/v2/agents/expert`);
+  console.log(`  Ralph:    POST http://localhost:${PORT}/api/v2/ralph`);
+  console.log(`  Stream:   http://localhost:${PORT}/api/v2/stream`);
+  console.log('═'.repeat(52) + '\n');
 });
 
-export default app;
+module.exports = app;

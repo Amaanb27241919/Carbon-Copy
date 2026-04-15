@@ -8,7 +8,7 @@
 
 // ── Core Agent Definitions (rawgrowth-os pattern) ──────────────────
 
-export const AGENT_REGISTRY = {
+const AGENT_REGISTRY = {
 
   // ── SCAN — Orchestrator / COO ─────────────────────────────────────
   scan: {
@@ -236,7 +236,7 @@ scan → research → synthesis → delivery
  * Route a task to the best-fit agent based on keywords.
  * Returns agent ID.
  */
-export function routeTask(taskDescription) {
+function routeTask(taskDescription) {
   const lower = taskDescription.toLowerCase();
   const scores = {};
 
@@ -254,7 +254,7 @@ export function routeTask(taskDescription) {
 /**
  * Get recommended agents for a task (top 3).
  */
-export function getRecommendedAgents(taskDescription, topN = 3) {
+function getRecommendedAgents(taskDescription, topN = 3) {
   const lower = taskDescription.toLowerCase();
   const scores = {};
 
@@ -272,13 +272,22 @@ export function getRecommendedAgents(taskDescription, topN = 3) {
 /**
  * Get all agents as array.
  */
-export function getAllAgents() {
+function getAllAgents() {
   return Object.values(AGENT_REGISTRY);
 }
 
 /**
  * Get agent by ID.
  */
-export function getAgent(agentId) {
+function getAgent(agentId) {
   return AGENT_REGISTRY[agentId] || null;
 }
+
+
+module.exports = {
+  routeTask,
+  getRecommendedAgents,
+  getAllAgents,
+  getAgent,
+  AGENT_REGISTRY,
+};

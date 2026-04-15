@@ -5,8 +5,8 @@
  * Supports: Desktop (macOS), Discord webhooks, Telegram bots
  */
 
-import { execFile } from 'child_process';
-import { promisify } from 'util';
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 const HTTP_TIMEOUT_MS = 10_000;
@@ -15,12 +15,12 @@ const HTTP_TIMEOUT_MS = 10_000;
 
 let _config = null;
 
-export function configureNotifications(config) {
+function configureNotifications(config) {
   _config = config;
   console.log('[notifications] Configured:', Object.keys(config).filter(k => config[k]).join(', ') || 'none');
 }
 
-export function getNotificationConfig() {
+function getNotificationConfig() {
   return _config || {
     desktop: process.platform === 'darwin',
     discord: process.env.DISCORD_WEBHOOK_URL ? { webhookUrl: process.env.DISCORD_WEBHOOK_URL } : null,
@@ -37,7 +37,7 @@ export function getNotificationConfig() {
  * Send a notification via all configured channels.
  * Fire-and-forget — failures are swallowed.
  */
-export async function notify(payload, config) {
+async function notify(payload, config) {
   const cfg = config || getNotificationConfig();
   const promises = [];
 
@@ -131,17 +131,29 @@ function jsonRequest({ hostname, path, body, errorPrefix, timeoutMs = HTTP_TIMEO
 
 // ── Convenience Helpers ─────────────────────────────────────────────
 
-export const notifyBudgetWarning = (agentId, spend, limit, window) =>
+const notifyBudgetWarning = (agentId, spend, limit, window) =>
   notify({ title: '⚠️ Budget Warning', message: `Agent ${agentId}: ${(spend/limit*100).toFixed(0)}% of ${window} budget ($${spend.toFixed(2)} / $${limit.toFixed(2)})`, type: 'warning', mode: 'budget' });
 
-export const notifyBudgetExceeded = (agentId, spend, limit, window) =>
+const notifyBudgetExceeded = (agentId, spend, limit, window) =>
   notify({ title: '🛑 Budget Exceeded', message: `Agent ${agentId} PAUSED: exceeded ${window} budget ($${spend.toFixed(2)} / $${limit.toFixed(2)})`, type: 'error', mode: 'budget' });
 
-export const notifyAgentCompleted = (agentId, taskPreview, cost, duration) =>
+const notifyAgentCompleted = (agentId, taskPreview, cost, duration) =>
   notify({ title: '✅ Agent Done', message: `${agentId}: "${taskPreview.slice(0, 60)}" — $${cost.toFixed(4)} in ${(duration/1000).toFixed(1)}s`, type: 'success', mode: 'heartbeat' });
 
-export const notifySystemError = (message) =>
+const notifySystemError = (message) =>
   notify({ title: '❌ System Error', message, type: 'error', mode: 'system' });
 
-export const notifyOrchestrationDone = (runId, mode, duration) =>
+const notifyOrchestrationDone = (runId, mode, duration) =>
   notify({ title: '🎯 Orchestration Complete', message: `Run ${runId.slice(0,8)} (${mode}) finished in ${(duration/1000).toFixed(1)}s`, type: 'success', mode: 'orchestration' });
+
+
+module.exports = {
+  configureNotifications,
+  getNotificationConfig,
+  notify,
+  notifyBudgetWarning,
+  notifyBudgetExceeded,
+  notifyAgentCompleted,
+  notifySystemError,
+  notifyOrchestrationDone,
+};
