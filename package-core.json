@@ -1,0 +1,35 @@
+{
+  "name": "carbon-copy-v2",
+  "version": "0.1.0",
+  "description": "ARIA Enterprise Edition - Self-hosted intelligence platform",
+  "main": "api-server.js",
+  "scripts": {
+    "start": "node api-server.js",
+    "bot": "node telegram-bot.js",
+    "setup": "bash setup-knowledge-vault.sh",
+    "dev": "nodemon api-server.js",
+    "test": "echo 'Tests coming soon'",
+    "start:v2": "node index-v2.js",
+    "dev:v2": "nodemon --watch services --watch index-v2.js index-v2.js"
+  },
+  "keywords": [
+    "aria",
+    "intelligence",
+    "research",
+    "self-hosted",
+    "orchestration"
+  ],
+  "author": "Amaan Khan",
+  "license": "PRIVATE",
+  "dependencies": {
+    "better-sqlite3": "^9.0.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "node-telegram-bot-api": "^0.61.0",
+    "socket.io": "^4.6.0",
+    "start": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
