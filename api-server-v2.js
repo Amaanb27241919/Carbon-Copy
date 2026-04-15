@@ -27,6 +27,9 @@ import { registerHeartbeatDb, resetStuckRuns } from './core/heartbeat-v2.js';
 import { registerAuditDb, logSystemAction, ActionTypes } from './core/audit-v2.js';
 import { registerHealthDb, startHealthMonitor } from './core/health-v2.js';
 import { createDashboardV2Router } from './dashboard-v2.js';
+import { initDb, migrateV2Schema } from './core/db-adapter.js';
+import { getVMStatusSummary } from './core/vm-manager-client.js';
+import { getProviders, getLocalModels } from './core/model-router-client.js';
 
 // ── App Setup ───────────────────────────────────────────────────────
 
@@ -102,6 +105,10 @@ registerHealthDb({
 
 // ── Startup Tasks ───────────────────────────────────────────────────
 
+// Init database (SQLite dev, PostgreSQL prod)
+const coreDb = await initDb();
+await migrateV2Schema(coreDb);
+
 resetStuckRuns();
 initBudgetPolicies();
 startHealthMonitor(5 * 60 * 1000); // 5 min interval
@@ -118,7 +125,25 @@ logSystemAction(ActionTypes.SYSTEM_STARTUP, 'system', 'api-server-v2', {
 app.use('/api/v2', createDashboardV2Router());
 
 // Status
-app.get('/api/v2/ping', (req, res) => res.json({ ok: true, version: '2.0.0', ts: Date.now() }));
+app.get('/api/v2/ping', (req, res) => res.json({ ok: true, version: '3.0.0', ts: Date.now() }));
+
+// VM status summary
+app.get('/api/v2/vms', async (req, res) => {
+  try { res.json(await getVMStatusSummary()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Model router provider status
+app.get('/api/v2/models/providers', async (req, res) => {
+  try { res.json(await getProviders()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Local models (Ollama)
+app.get('/api/v2/models/local', async (req, res) => {
+  try { res.json(await getLocalModels()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── Try to import and mount v1 API if it exists ──────────────────────
 try {
