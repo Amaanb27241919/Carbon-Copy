@@ -54,7 +54,7 @@ const {
 
 const { generateProposal } = require('./core/proposal-service.js');
 const { getVMStatusSummary } = require('./core/vm-manager-client.js');
-const { getProviders, getLocalModels } = require('./core/model-router-client.js');
+const { chat: modelChat, getProviders, getLocalModels } = require('./core/model-router-client.js');
 const { getAllExpertAgents, findBestAgent } = require('./core/expert-agents.js');
 const { startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops } = require('./core/ralph-loop.js');
 const { listHooks, registerHook, registerDefaultHooks, triggerHooks } = require('./core/hooks-engine.js');
@@ -300,6 +300,44 @@ app.get('/api/v2/stream', (req, res) => {
   res.write(`data: ${JSON.stringify({ type: 'connected', ts: Date.now() })}\n\n`);
   sseClients.add(res);
   req.on('close', () => sseClients.delete(res));
+});
+
+// Chat
+app.get('/api/v2/chat/models', async (req, res) => {
+  try {
+    const data = await getProviders();
+    const models = (data.providers || []).map(p => ({
+      id: p.defaultModel || p.name,
+      name: p.name,
+      provider: p.name,
+      available: p.available || false,
+    }));
+    res.json({ models });
+  } catch (e) {
+    res.json({ models: [] });
+  }
+});
+
+app.post('/api/v2/chat', async (req, res) => {
+  const { messages, model, provider } = req.body;
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'messages array required' });
+  }
+  try {
+    const result = await modelChat(messages, {
+      model,
+      provider,
+      skipBudgetCheck: true,
+    });
+    res.json({
+      content: result.content || result.response || '',
+      provider: result.provider,
+      model: result.model,
+      tokens: result.tokensUsed,
+    });
+  } catch (e) {
+    res.json({ error: 'No AI provider available. Start Ollama or set ANTHROPIC_API_KEY.' });
+  }
 });
 
 // ── Error Handler ──────────────────────────────────────────────────────

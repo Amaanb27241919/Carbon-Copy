@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Send, Loader2, MessageSquare, ChevronDown, Cpu } from 'lucide-react';
-import { modelsApi, AIModel, ChatMessage } from '@/lib/api';
+import { coreApi, AIModel, ChatMessage } from '@/lib/api';
 import { ChatBubble } from '@/components/ChatBubble';
 import { PageHeader } from '@/components/PageHeader';
 import { cn, getErrorMessage } from '@/lib/utils';
@@ -21,8 +21,8 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const { data: models = [] } = useQuery<AIModel[]>({
-    queryKey: ['models'],
-    queryFn: modelsApi.list,
+    queryKey: ['core-models'],
+    queryFn: coreApi.getModels,
     staleTime: 60_000,
   });
 
@@ -50,16 +50,22 @@ export default function ChatPage() {
     setSending(true);
 
     try {
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-      const result = await modelsApi.chat({
-        model: selectedModel || SYSTEM_DEFAULT,
-        message: text,
-        history,
-      });
+      const allMessages = [
+        ...messages.map(m => ({ role: m.role, content: m.content })),
+        { role: 'user', content: text },
+      ];
+      const result = await coreApi.chat(allMessages, selectedModel || undefined);
+
+      if (result.error) {
+        toast('error', result.error);
+        setMessages(prev => prev.filter(m => m !== userMsg));
+        setInput(text);
+        return;
+      }
 
       const assistantMsg: ChatMessage = {
         role: 'assistant',
-        content: result.response,
+        content: result.content || '',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, assistantMsg]);

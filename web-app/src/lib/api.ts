@@ -196,6 +196,51 @@ export const sandboxApi = {
   },
 };
 
+// ─── Core API (Carbon Core direct — no Docker required) ───────────────────────
+
+export interface CoreChatResponse {
+  content?: string;
+  provider?: string;
+  model?: string;
+  tokens?: number;
+  error?: string;
+}
+
+const CORE_API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL || '/app/core-api';
+
+export const coreApi = {
+  chat: async (
+    messages: Array<{ role: string; content: string }>,
+    model?: string
+  ): Promise<CoreChatResponse> => {
+    const res = await fetch(`${CORE_API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, ...(model ? { model } : {}) }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { error: (data as CoreChatResponse).error || `Request failed: ${res.status}` };
+    }
+    return res.json() as Promise<CoreChatResponse>;
+  },
+  getModels: async (): Promise<AIModel[]> => {
+    try {
+      const res = await fetch(`${CORE_API_BASE}/chat/models`);
+      if (!res.ok) return [];
+      const data = await res.json() as { models?: Array<{ id: string; name: string; provider: string; available: boolean }> };
+      return (data.models || []).map(m => ({
+        id: m.id,
+        name: m.name || m.id,
+        provider: m.provider as AIModel['provider'],
+        available: m.available,
+      }));
+    } catch {
+      return [];
+    }
+  },
+};
+
 export const settingsApi = {
   getSettings: async (): Promise<Record<string, string>> => {
     const { data } = await api.get('/settings');
