@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Cpu,
-  Folder,
+  Server,
   Settings,
   Target,
   MessageSquare,
@@ -24,8 +24,8 @@ const TABS: Tab[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, matchExact: true },
   { href: '/missions', label: 'Missions', icon: Target },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
+  { href: '/vms', label: 'VMs', icon: Server },
   { href: '/core', label: 'Core', icon: Layers },
-  { href: '/models', label: 'Models', icon: Cpu },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

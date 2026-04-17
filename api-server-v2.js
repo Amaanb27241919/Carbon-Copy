@@ -54,6 +54,7 @@ const {
 
 const { generateProposal } = require('./core/proposal-service.js');
 const { getVMStatusSummary } = require('./core/vm-manager-client.js');
+const utm = require('./core/utm-client.js');
 const { chat: modelChat, getProviders, getLocalModels, pullLocalModel } = require('./core/model-router-client.js');
 const { getAllExpertAgents, findBestAgent } = require('./core/expert-agents.js');
 const { startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops } = require('./core/ralph-loop.js');
@@ -285,9 +286,45 @@ app.post('/api/v2/proposal', async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// VMs
+// VMs — unified UTM + Docker KVM
 app.get('/api/v2/vms', async (req, res) => {
-  try { res.json(await getVMStatusSummary()); }
+  try {
+    const [kvmSummary, utmVMs, utmStatus] = await Promise.all([
+      getVMStatusSummary().catch(() => ({ kvm_available: false, vms: [] })),
+      utm.listUTMVMs().catch(() => []),
+      utm.getUTMStatus().catch(() => ({ available: false, vm_count: 0 })),
+    ]);
+    const allVMs = [...utmVMs, ...(kvmSummary.vms || [])];
+    res.json({
+      utm_available: utmStatus.available,
+      kvm_available: kvmSummary.kvm_available || false,
+      total: allVMs.length,
+      running: allVMs.filter(v => v.running).length,
+      stopped: allVMs.filter(v => !v.running).length,
+      vms: allVMs,
+      providers: {
+        utm: { available: utmStatus.available, description: 'Native Apple Silicon (macOS, Windows ARM, Linux)' },
+        kvm: { available: kvmSummary.kvm_available || false, description: 'Linux via Docker QEMU' },
+      },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// UTM VM actions
+app.post('/api/v2/vms/utm', async (req, res) => {
+  try { res.json(await utm.createUTMVM(req.body)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v2/vms/utm/:uuid/start', async (req, res) => {
+  try { res.json(await utm.startUTMVM(req.params.uuid)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v2/vms/utm/:uuid/stop', async (req, res) => {
+  try { res.json(await utm.stopUTMVM(req.params.uuid, req.body?.force)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.delete('/api/v2/vms/utm/:uuid', async (req, res) => {
+  try { res.json(await utm.deleteUTMVM(req.params.uuid)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
