@@ -19,3 +19,5 @@ grafana-data/
 *.key
 *.crt
 .DS_Store
+web-app/.next/
+web-app/node_modules/
