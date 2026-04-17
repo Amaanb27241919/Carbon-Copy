@@ -1,0 +1,25 @@
+title = "Carbon Copy Gitleaks Config"
+
+[allowlist]
+description = "Ignore false positives in build artifacts and internal hashes"
+
+paths = [
+  # Next.js build artifacts — not real secrets, internal hashes/references
+  '''web-app/\.next/''',
+  # Lock files can have high-entropy strings
+  '''package-lock\.json''',
+]
+
+[[rules]]
+# Override generic-api-key to be less aggressive on known patterns
+id = "generic-api-key"
+description = "Generic API Key"
+regex = '''(?i)(api[_-]?key|apikey|secret|encryption[_-]?key|encryptionkey)\s*[:=]\s*["\']([a-zA-Z0-9+/]{20,})["\']'''
+entropy = 5.0
+keywords = ["key", "secret", "encryption"]
+
+[[rules.allowlist]]
+description = "Next.js internal server reference manifest keys"
+regexes = [
+  '''encryptionKey.*[a-f0-9]{32}''',
+]
