@@ -727,6 +727,42 @@ services:
       retries: 5
       start_period: 20s
 
+  # ─── Carbon Core v3 API (budget, heartbeat, orchestration, VMs) ─────────────
+  carbon-core:
+    build:
+      context: .
+      dockerfile: Dockerfile.core
+    container_name: carbon-core
+    <<: *node-common
+    expose:
+      - "3001"
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: "3001"
+      DB_ADAPTER: "postgres"
+      DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      MODEL_ROUTER_URL: "http://model-router:3004"
+      KVM_MANAGER_URL: "http://kvm-manager:3007"
+      ARIA_SERVICE_URL: "http://aria-service:3008"
+      INTERNAL_SERVICE_TOKEN: "${INTERNAL_SERVICE_TOKEN}"
+      SQLITE_PATH: "/data/carbon-core.db"
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+    volumes:
+      - ./carbon-copy.db:/data/carbon-core.db
+    depends_on:
+      postgres:
+        condition: service_healthy
+      model-router:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/v2/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # ─── KVM Manager (QEMU/KVM Virtual Machines) ──────────────────────────────
   kvm-manager:
     build:

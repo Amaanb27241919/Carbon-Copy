@@ -4,13 +4,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Box,
   Cpu,
   Folder,
-  Terminal,
   Settings,
   Target,
   MessageSquare,
+  Layers,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,8 +24,8 @@ const TABS: Tab[] = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard, matchExact: true },
   { href: '/missions', label: 'Missions', icon: Target },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
+  { href: '/core', label: 'Core', icon: Layers },
   { href: '/models', label: 'Models', icon: Cpu },
-  { href: '/files', label: 'Files', icon: Folder },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
