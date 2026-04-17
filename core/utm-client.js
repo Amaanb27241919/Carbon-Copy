@@ -100,14 +100,19 @@ function mapStatus(status = '') {
 // ── VM Lifecycle ──────────────────────────────────────────────────────
 
 async function startUTMVM(uuid) {
-  const result = await utmctl('start', uuid);
-  return { success: result !== null, message: result || 'Failed to start VM' };
+  await utmctl('start', uuid); // UTM prints OSStatus errors even on success — ignore
+  await new Promise(r => setTimeout(r, 1500)); // give UTM a moment to update status
+  const status = await getUTMVMStatus(uuid);
+  const running = status === 'running';
+  return { success: running, status, message: running ? 'VM started' : 'VM may be starting — check UTM' };
 }
 
 async function stopUTMVM(uuid, force = false) {
   const args = force ? ['stop', uuid, '--kill'] : ['stop', uuid];
-  const result = await utmctl(...args);
-  return { success: result !== null, message: result || 'Failed to stop VM' };
+  await utmctl(...args);
+  await new Promise(r => setTimeout(r, 1000));
+  const status = await getUTMVMStatus(uuid);
+  return { success: status === 'stopped' || status === null, status, message: 'VM stopped' };
 }
 
 async function suspendUTMVM(uuid) {
