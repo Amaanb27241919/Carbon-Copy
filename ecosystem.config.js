@@ -1,9 +1,12 @@
+const path = require('path');
+const ROOT = __dirname;
+
 module.exports = {
   apps: [
     {
       name: 'carbon-core',
-      script: 'api-server-v2.js',
-      cwd: '/Users/amaankhan/Desktop/OmniFlow/Carbon-Copy',
+      script: path.join(ROOT, 'core', 'v4', 'api-server-v4.js'),
+      cwd: ROOT,
       watch: false,
       autorestart: true,
       max_restarts: 10,
@@ -15,9 +18,9 @@ module.exports = {
     },
     {
       name: 'carbon-web',
-      script: 'node_modules/.bin/next',
+      script: path.join(ROOT, 'web-app', 'node_modules', '.bin', 'next'),
       args: 'dev -p 3006',
-      cwd: '/Users/amaankhan/Desktop/OmniFlow/Carbon-Copy/web-app',
+      cwd: path.join(ROOT, 'web-app'),
       watch: false,
       autorestart: true,
       max_restarts: 10,
