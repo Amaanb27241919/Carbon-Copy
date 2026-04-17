@@ -4,12 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Cpu,
   Server,
   Settings,
   Target,
   MessageSquare,
   Layers,
+  BookOpen,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,8 +22,10 @@ interface Tab {
 }
 
 const TABS: Tab[] = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard, matchExact: true },
+  { href: '/', label: 'Home', icon: LayoutDashboard, matchExact: true },
   { href: '/missions', label: 'Missions', icon: Target },
+  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/skills', label: 'Skills', icon: Zap },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/vms', label: 'VMs', icon: Server },
   { href: '/core', label: 'Core', icon: Layers },
@@ -43,7 +46,7 @@ export function BottomNav() {
         'fixed bottom-0 left-0 right-0 z-50',
         'bg-slate-900/95 backdrop-blur-xl',
         'border-t border-slate-700/60',
-        'flex items-stretch',
+        'flex items-stretch overflow-x-auto scrollbar-none',
         // Safe area padding for iPhone home indicator
         'pb-[env(safe-area-inset-bottom,0px)]'
       )}
@@ -61,7 +64,7 @@ export function BottomNav() {
             className={cn(
               'flex-1 flex flex-col items-center justify-center gap-0.5',
               'pt-2 pb-1 px-1',
-              'min-h-[56px]',
+              'min-h-[56px] min-w-[56px]',
               'transition-all duration-150',
               'select-none touch-manipulation',
               'relative',

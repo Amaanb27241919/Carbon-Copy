@@ -1,23 +1,10 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { DollarSign, Zap, Target, TrendingUp, AlertTriangle, RefreshCw } from 'lucide-react';
-import { ariaApi, AriaBudget } from '@/lib/api';
+import { DollarSign, Shield, Activity, AlertTriangle, RefreshCw, Users } from 'lucide-react';
+import { coreApiV4, V4Budget } from '@/lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
-
-function ProgressBar({ pct, color }: { pct: number; color: string }) {
-  const capped = Math.min(pct, 100);
-  const isOver = pct >= 90;
-  return (
-    <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
-      <div
-        className={cn('h-2 rounded-full transition-all duration-500', isOver ? 'bg-red-500' : color)}
-        style={{ width: `${capped}%` }}
-      />
-    </div>
-  );
-}
 
 function StatCard({
   icon: Icon,
@@ -47,21 +34,21 @@ function StatCard({
 }
 
 export default function BudgetPage() {
-  const { data: budget, isLoading, refetch } = useQuery<AriaBudget>({
-    queryKey: ['aria-budget'],
-    queryFn: ariaApi.getBudget,
+  const { data: budget, isLoading, isError, refetch } = useQuery<V4Budget>({
+    queryKey: ['v4-budget'],
+    queryFn: coreApiV4.budgetV4.get,
     refetchInterval: 30_000,
   });
 
-  const dailyPct = budget?.utilization.dailyPct ?? 0;
-  const monthlyPct = budget?.utilization.monthlyPct ?? 0;
-  const isWarning = dailyPct >= 80 || monthlyPct >= 80;
+  const hasPaused = (budget?.paused_agents?.length ?? 0) > 0;
+  const hasIncidents = (budget?.total_incidents ?? 0) > 0;
+  const isWarning = hasPaused || hasIncidents;
 
   return (
     <div className="min-h-screen pb-nav">
       <PageHeader
         title="Budget"
-        subtitle="ARIA intelligence spend tracking"
+        subtitle="Carbon Core v4 spend governance"
         actions={
           <button onClick={() => refetch()} className="btn-secondary p-2.5">
             <RefreshCw className="w-4 h-4" />
@@ -70,62 +57,36 @@ export default function BudgetPage() {
       />
 
       <div className="px-4 py-4 space-y-5 page-enter">
-        {/* Warning banner */}
-        {!isLoading && isWarning && (
-          <div className="bg-amber-950/50 border border-amber-800/50 rounded-2xl px-4 py-3 flex items-center gap-3">
-            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <p className="text-sm text-amber-300 font-medium">
-              Approaching budget limit — {Math.max(dailyPct, monthlyPct)}% utilization
+        {/* Error state */}
+        {isError && (
+          <div className="bg-red-950/50 border border-red-800/50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
+            <p className="text-sm text-red-300 font-medium">
+              Cannot reach Carbon Core v4 — run: <code className="font-mono text-xs bg-red-900/50 px-1 rounded">node core/v4/api-server-v4.js</code>
             </p>
           </div>
         )}
 
-        {/* Daily utilization */}
-        <section className="card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">Today</h2>
-            {isLoading ? (
-              <div className="skeleton h-3 w-16 rounded" />
-            ) : (
-              <span className={cn('text-xs font-bold', dailyPct >= 90 ? 'text-red-400' : 'text-slate-400')}>
-                {dailyPct}% of ${budget?.limits.dailyUSD}
-              </span>
-            )}
+        {/* Warning banner */}
+        {!isLoading && !isError && isWarning && (
+          <div className="bg-amber-950/50 border border-amber-800/50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 flex-shrink-0" />
+            <p className="text-sm text-amber-300 font-medium">
+              {hasPaused
+                ? `${budget!.paused_agents.length} agent${budget!.paused_agents.length > 1 ? 's' : ''} paused — budget exceeded`
+                : `${budget!.total_incidents} budget incident${budget!.total_incidents > 1 ? 's' : ''} recorded`}
+            </p>
           </div>
-          {isLoading ? (
-            <div className="skeleton h-2 w-full rounded-full" />
-          ) : (
-            <ProgressBar pct={dailyPct} color="bg-indigo-500" />
-          )}
-        </section>
-
-        {/* Monthly utilization */}
-        <section className="card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xs font-semibold text-slate-400 uppercase tracking-widest">This Month</h2>
-            {isLoading ? (
-              <div className="skeleton h-3 w-16 rounded" />
-            ) : (
-              <span className={cn('text-xs font-bold', monthlyPct >= 90 ? 'text-red-400' : 'text-slate-400')}>
-                {monthlyPct}% of ${budget?.limits.monthlyUSD}
-              </span>
-            )}
-          </div>
-          {isLoading ? (
-            <div className="skeleton h-2 w-full rounded-full" />
-          ) : (
-            <ProgressBar pct={monthlyPct} color="bg-violet-500" />
-          )}
-        </section>
+        )}
 
         {/* Stats grid */}
         <section>
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
-            Today
+            Governance Overview
           </h2>
           <div className="grid grid-cols-2 gap-3">
             {isLoading ? (
-              Array.from({ length: 4 }).map((_, i) => (
+              Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="card p-4">
                   <div className="skeleton h-3 w-20 rounded mb-2" />
                   <div className="skeleton h-5 w-16 rounded" />
@@ -134,31 +95,31 @@ export default function BudgetPage() {
             ) : (
               <>
                 <StatCard
-                  icon={DollarSign}
-                  label="Cost"
-                  value={`$${(budget?.today.costUSD ?? 0).toFixed(4)}`}
-                  sub="USD spent today"
-                  color="bg-green-900/40 text-green-400"
-                />
-                <StatCard
-                  icon={Zap}
-                  label="Tokens"
-                  value={(budget?.today.tokensUsed ?? 0).toLocaleString()}
-                  sub="tokens used today"
-                  color="bg-amber-900/40 text-amber-400"
-                />
-                <StatCard
-                  icon={Target}
-                  label="Missions"
-                  value={String(budget?.today.missionsRun ?? 0)}
-                  sub="missions today"
+                  icon={Shield}
+                  label="Active Policies"
+                  value={String(budget?.total_policies ?? 0)}
+                  sub="spend limit rules"
                   color="bg-indigo-900/40 text-indigo-400"
                 />
                 <StatCard
-                  icon={TrendingUp}
-                  label="Daily Limit"
-                  value={`$${budget?.limits.dailyUSD ?? 0}`}
-                  sub="configure in .env"
+                  icon={Users}
+                  label="Paused Agents"
+                  value={String(budget?.paused_agents?.length ?? 0)}
+                  sub={hasPaused ? 'over budget limit' : 'all agents running'}
+                  color={hasPaused ? 'bg-red-900/40 text-red-400' : 'bg-green-900/40 text-green-400'}
+                />
+                <StatCard
+                  icon={Activity}
+                  label="Total Incidents"
+                  value={String(budget?.total_incidents ?? 0)}
+                  sub="budget breaches logged"
+                  color={hasIncidents ? 'bg-amber-900/40 text-amber-400' : 'bg-slate-800 text-slate-400'}
+                />
+                <StatCard
+                  icon={DollarSign}
+                  label="Spend Events"
+                  value={String(budget?.recent_incidents?.length ?? 0)}
+                  sub="recent incidents"
                   color="bg-slate-800 text-slate-400"
                 />
               </>
@@ -166,50 +127,70 @@ export default function BudgetPage() {
           </div>
         </section>
 
-        {/* Monthly summary */}
-        <section>
-          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
-            This Month
-          </h2>
-          <div className="grid grid-cols-3 gap-3">
-            {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="card flex flex-col items-center py-4 gap-1">
-                  <div className="skeleton h-5 w-12 rounded" />
-                  <div className="skeleton h-3 w-16 rounded" />
+        {/* Paused agents */}
+        {!isLoading && hasPaused && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
+              Paused Agents
+            </h2>
+            <div className="card divide-y divide-slate-800/60">
+              {budget!.paused_agents.map((agentId) => (
+                <div key={agentId} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                    <span className="text-sm text-slate-300 font-mono">{agentId}</span>
+                  </div>
+                  <span className="text-xs text-red-400 font-medium">Paused</span>
                 </div>
-              ))
-            ) : (
-              <>
-                <div className="card flex flex-col items-center justify-center py-4 text-center gap-0.5">
-                  <DollarSign className="w-4 h-4 text-green-400 mb-1" />
-                  <span className="text-base font-bold text-slate-100">
-                    ${(budget?.month.costUSD ?? 0).toFixed(2)}
-                  </span>
-                  <span className="text-[10px] text-slate-500">Cost</span>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Recent incidents */}
+        {!isLoading && (budget?.recent_incidents?.length ?? 0) > 0 && (
+          <section>
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
+              Recent Incidents
+            </h2>
+            <div className="space-y-2">
+              {budget!.recent_incidents.map((inc, i) => (
+                <div key={i} className="card px-4 py-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-semibold text-slate-200 font-mono">{inc.agent_id}</span>
+                    <span className="text-xs text-red-400 font-bold">${inc.current_spend.toFixed(4)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">Limit: ${inc.limit_usd.toFixed(2)}</span>
+                    {inc.reason && <span className="text-xs text-slate-600 truncate max-w-[140px]">{inc.reason}</span>}
+                  </div>
+                  {/* spend bar */}
+                  <div className="mt-2 w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-1.5 rounded-full bg-red-500 transition-all"
+                      style={{ width: `${Math.min((inc.current_spend / inc.limit_usd) * 100, 100)}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="card flex flex-col items-center justify-center py-4 text-center gap-0.5">
-                  <Zap className="w-4 h-4 text-amber-400 mb-1" />
-                  <span className="text-base font-bold text-slate-100">
-                    {((budget?.month.tokensUsed ?? 0) / 1000).toFixed(1)}k
-                  </span>
-                  <span className="text-[10px] text-slate-500">Tokens</span>
-                </div>
-                <div className="card flex flex-col items-center justify-center py-4 text-center gap-0.5">
-                  <Target className="w-4 h-4 text-indigo-400 mb-1" />
-                  <span className="text-base font-bold text-slate-100">
-                    {budget?.month.missionsRun ?? 0}
-                  </span>
-                  <span className="text-[10px] text-slate-500">Missions</span>
-                </div>
-              </>
-            )}
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !isError && (budget?.total_policies ?? 0) === 0 && (
+          <div className="card flex flex-col items-center justify-center py-10 text-center gap-3">
+            <Shield className="w-8 h-8 text-slate-600" />
+            <p className="text-sm text-slate-500">No budget policies configured</p>
+            <p className="text-xs text-slate-600 max-w-[220px]">
+              Create a policy via<br />
+              <code className="font-mono text-indigo-400 text-[10px]">POST /api/v4/budget/policy</code>
+            </p>
           </div>
-        </section>
+        )}
 
         <p className="text-xs text-slate-600 text-center pb-2">
-          Limits: ${budget?.limits.dailyUSD ?? '—'}/day · ${budget?.limits.monthlyUSD ?? '—'}/month
-          <br />Set BUDGET_DAILY_USD and BUDGET_MONTHLY_USD in .env
+          Set BUDGET_DAILY_USD and BUDGET_MONTHLY_USD in .env
         </p>
       </div>
     </div>

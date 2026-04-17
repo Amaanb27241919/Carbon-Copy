@@ -7,7 +7,7 @@ import { RefreshCw, Database, Cpu, HardDrive, Activity, Target, CheckCircle, Clo
 import { useServices } from '@/hooks/useServices';
 import { ServiceCard, ServiceCardSkeleton } from '@/components/ServiceCard';
 import { PageHeader } from '@/components/PageHeader';
-import { api, StorageStats, coreApi, AriaMission, AriaBudget } from '@/lib/api';
+import { api, StorageStats, coreApi, coreApiV4, AriaMission, AriaBudget } from '@/lib/api';
 import { cn, formatBytes, timeAgo } from '@/lib/utils';
 
 interface SystemStats {
@@ -122,6 +122,12 @@ export default function DashboardPage() {
   const { data: stats, isLoading: statsLoading } = useSystemStats();
   const { data: recentOutputs = [], isLoading: outputsLoading } = useRecentOutputs();
   const { missions: ariaMissions, agents: ariaAgents, budget: ariaBudget } = useAriaData();
+
+  // v4 stats
+  const v4Health   = useQuery({ queryKey: ['v4-health'],   queryFn: coreApiV4.health, refetchInterval: 30000 });
+  const v4Domains  = useQuery({ queryKey: ['v4-domains'],  queryFn: () => coreApiV4.knowledgeV4.domains(), refetchInterval: 60000 });
+  const v4Skills   = useQuery({ queryKey: ['v4-skills'],   queryFn: () => coreApiV4.skillsV4.list(), staleTime: 300000 });
+  const v4Runs     = useQuery({ queryKey: ['v4-runs-today'], queryFn: () => coreApiV4.runsV4.list({ limit: 100 }), refetchInterval: 30000 });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [pullDistance, setPullDistance] = useState(0);
@@ -286,6 +292,50 @@ export default function DashboardPage() {
               )}
               <span className="text-[10px] text-slate-500">Containers</span>
             </div>
+          </div>
+        </section>
+
+        {/* v4 Stats Row */}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
+            Carbon Core v4
+          </h2>
+          <div className="grid grid-cols-4 gap-2">
+            {[
+              {
+                label: 'Agents',
+                value: v4Health.data
+                  ? String((v4Health.data as Record<string, unknown>).agent_count ?? '—')
+                  : '—',
+                icon: <Activity className="w-4 h-4 text-indigo-400" />,
+              },
+              {
+                label: 'Chunks',
+                value: v4Domains.data
+                  ? String(
+                      (Object.values(v4Domains.data.stats) as Array<{ chunks?: number; total?: number }>)
+                        .reduce((sum, d) => sum + (d?.chunks ?? d?.total ?? 0), 0)
+                    )
+                  : '—',
+                icon: <Database className="w-4 h-4 text-amber-400" />,
+              },
+              {
+                label: 'Skills',
+                value: String(v4Skills.data?.total ?? '—'),
+                icon: <Cpu className="w-4 h-4 text-green-400" />,
+              },
+              {
+                label: 'Runs',
+                value: String(v4Runs.data?.total ?? '—'),
+                icon: <Target className="w-4 h-4 text-violet-400" />,
+              },
+            ].map(({ label, value, icon }) => (
+              <div key={label} className="card flex flex-col items-center justify-center py-3 text-center gap-1">
+                {icon}
+                <span className="text-base font-bold text-slate-100">{value}</span>
+                <span className="text-[10px] text-slate-500">{label}</span>
+              </div>
+            ))}
           </div>
         </section>
 

@@ -1,8 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Activity, DollarSign, Server, Shield, Cpu, Zap, GitBranch, Users } from 'lucide-react';
+import { Activity, DollarSign, Server, Shield, Cpu, Zap, BookOpen, Target, List, Users } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
+import { coreApiV4 } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 const CORE_API = process.env.NEXT_PUBLIC_CORE_API_URL || '/app/core-api';
@@ -54,6 +55,11 @@ export default function CorePage() {
   const agents  = useQuery({ queryKey: ['core-agents'],  queryFn: () => fetchCore('/agents/expert'), staleTime: 300000 });
   const vms     = useQuery({ queryKey: ['core-vms'],     queryFn: () => fetchCore('/vms'),     refetchInterval: 30000 });
   const usage   = useQuery({ queryKey: ['core-usage'],   queryFn: () => fetchCore('/usage/window?days=7'), refetchInterval: 60000 });
+
+  // v4 data
+  const v4Domains = useQuery({ queryKey: ['v4-domains'], queryFn: () => coreApiV4.knowledgeV4.domains(), refetchInterval: 60000 });
+  const v4Skills  = useQuery({ queryKey: ['v4-skills'],  queryFn: () => coreApiV4.skillsV4.list(), staleTime: 300000 });
+  const v4Runs    = useQuery({ queryKey: ['v4-runs'],    queryFn: () => coreApiV4.runsV4.list({ limit: 5 }), refetchInterval: 15000 });
 
   const s = summary.data;
   const h = health.data;
@@ -224,6 +230,95 @@ export default function CorePage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Knowledge Base (v4) */}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">
+            Knowledge Base
+          </h2>
+          {v4Domains.data ? (
+            <div className="card divide-y divide-slate-800/60">
+              {v4Domains.data.domains.length === 0 ? (
+                <div className="px-4 py-4 text-center text-xs text-slate-500">No knowledge domains ingested yet.</div>
+              ) : v4Domains.data.domains.map((domain: string) => {
+                const domainStats = v4Domains.data.stats as Record<string, { chunks?: number; total?: number }>;
+                const chunks = domainStats?.[domain]?.chunks ?? domainStats?.[domain]?.total ?? '—';
+                return (
+                  <div key={domain} className="flex items-center justify-between px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                      <span className="text-sm text-slate-300 capitalize">{domain}</span>
+                    </div>
+                    <span className="text-xs text-slate-500 font-mono">{chunks} chunks</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="card p-4 text-center text-xs text-slate-500">Loading knowledge base...</div>
+          )}
+        </section>
+
+        {/* Skills (v4) */}
+        <section>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest">Skills Catalog</h2>
+            <span className="text-xs text-indigo-400 font-semibold">{v4Skills.data?.total ?? 0} skills</span>
+          </div>
+          <div className="card p-4">
+            {v4Skills.isLoading ? (
+              <div className="text-xs text-slate-500 text-center">Loading skills...</div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {Array.from(new Set((v4Skills.data?.skills ?? []).map((s: { category: string }) => s.category))).map((cat) => {
+                  const count = (v4Skills.data?.skills ?? []).filter((s: { category: string }) => s.category === cat).length;
+                  return (
+                    <span key={String(cat)} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium bg-indigo-900/40 text-indigo-300 border border-indigo-700/40">
+                      <Target className="w-2.5 h-2.5" />
+                      {String(cat)} ({count})
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* Recent Agent Runs (v4) */}
+        <section>
+          <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3 px-1">Recent Runs (v4)</h2>
+          {v4Runs.isLoading ? (
+            <div className="card p-4 text-center text-xs text-slate-500">Loading runs...</div>
+          ) : (v4Runs.data?.runs ?? []).length === 0 ? (
+            <div className="card p-4 text-center text-xs text-slate-500">No runs yet.</div>
+          ) : (
+            <div className="card divide-y divide-slate-800/60">
+              {(v4Runs.data?.runs ?? []).map((run: { id: string; run_type: string; status: string; agent_id?: string; cost_usd?: number; created_at?: number }) => (
+                <div key={run.id} className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <List className="w-3.5 h-3.5 text-indigo-400 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-300 truncate">{run.agent_id ?? run.run_type}</p>
+                      <p className="text-[10px] text-slate-600">{run.run_type}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {run.cost_usd != null && (
+                      <span className="text-[10px] text-slate-600 font-mono">${run.cost_usd.toFixed(4)}</span>
+                    )}
+                    <span className={cn(
+                      'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                      run.status === 'completed' ? 'bg-green-900/40 text-green-400' :
+                      run.status === 'running' ? 'bg-blue-900/40 text-blue-400' :
+                      run.status === 'failed' ? 'bg-red-900/40 text-red-400' :
+                      'bg-slate-700/60 text-slate-400'
+                    )}>{run.status}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         {/* System Info */}
