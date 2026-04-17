@@ -1,7 +1,9 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/auth';
 
+// In Docker: hits nginx → gateway. Standalone: hits Carbon Core directly.
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost/api';
+const CORE_URL = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api/v2';
 
 export const api = axios.create({
   baseURL: API_URL,

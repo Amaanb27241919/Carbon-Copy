@@ -264,7 +264,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-4 h-4 text-indigo-400" />
-                <span className="text-sm text-slate-300">Carbon Cloud</span>
+                <span className="text-sm text-slate-300">Carbon Core</span>
               </div>
               <span className="text-xs text-slate-500">v1.0.0</span>
             </div>

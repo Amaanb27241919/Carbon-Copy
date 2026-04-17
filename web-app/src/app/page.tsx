@@ -162,11 +162,13 @@ export default function DashboardPage() {
       )}
 
       <PageHeader
-        title="Carbon Cloud"
+        title="Carbon Core"
         subtitle={
           servicesLoading
             ? 'Checking services...'
-            : `${upCount}/${totalServices} services operational`
+            : upCount > 0
+            ? `${upCount}/${totalServices} services up`
+            : 'Start Docker for full stack · Core API running'
         }
         actions={
           <button

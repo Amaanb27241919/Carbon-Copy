@@ -62,7 +62,7 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-indigo-600/20 border border-indigo-500/30 rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_24px_rgba(99,102,241,0.2)]">
             <Zap className="w-8 h-8 text-indigo-400" strokeWidth={2.5} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-50">Carbon Cloud</h1>
+          <h1 className="text-2xl font-bold text-slate-50">Carbon Core</h1>
           <p className="text-sm text-slate-500 mt-1">AI Infrastructure Control Panel</p>
         </div>
 
@@ -70,7 +70,7 @@ export default function LoginPage() {
         <div className="card-elevated p-6 space-y-5">
           <div>
             <h2 className="text-lg font-semibold text-slate-100">Sign in</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Use your Carbon Cloud credentials</p>
+            <p className="text-xs text-slate-500 mt-0.5">Use your Carbon Core credentials</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
@@ -147,7 +147,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-600 mt-6">
-          Carbon Cloud v1.0.0 &mdash; Internal Use Only
+          Carbon Core v1.0.0 &mdash; Internal Use Only
         </p>
       </div>
     </div>

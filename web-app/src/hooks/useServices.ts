@@ -4,30 +4,33 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { ServiceHealth } from '@/lib/api';
 
-// Services to health-check (proxied through the gateway)
-const SERVICES: Array<{ name: string; endpoint: string; noAuth?: boolean }> = [
+// Services to health-check.
+// Carbon Core (/api/v2) works standalone. Docker services need full stack.
+const SERVICES: Array<{ name: string; endpoint: string; noAuth?: boolean; direct?: string }> = [
+  { name: 'Carbon Core',  endpoint: '/api/v2/ping',        noAuth: true, direct: 'http://localhost:3001/api/v2/ping' },
   { name: 'Gateway',      endpoint: '/health',             noAuth: true },
   { name: 'Auth',         endpoint: '/auth/health',        noAuth: true },
-  { name: 'Data Server',  endpoint: '/api/data/health' },
+  { name: 'Model Router', endpoint: '/api/models',         noAuth: true },
+  { name: 'ARIA',         endpoint: '/api/aria/health',    noAuth: true },
   { name: 'VM Manager',   endpoint: '/api/vm/health' },
-  { name: 'OpenClaw',     endpoint: '/api/openclaw/health' },
-  { name: 'NemoClaw',     endpoint: '/api/nemoclaw/health' },
-  { name: 'Model Router', endpoint: '/api/models' },
+  { name: 'Data Server',  endpoint: '/api/data/health' },
   { name: 'Sandbox',      endpoint: '/api/sandbox/health' },
-  { name: 'ARIA',         endpoint: '/api/aria/health' },
 ];
 
 async function checkService(
   name: string,
   endpoint: string,
-  noAuth?: boolean
+  noAuth?: boolean,
+  direct?: string
 ): Promise<ServiceHealth> {
   const start = Date.now();
   const token = typeof window !== 'undefined'
     ? JSON.parse(localStorage.getItem('carbon-auth') || '{}')?.state?.token || ''
     : '';
+  // Try direct URL first (for standalone mode), fall back to gateway
+  const url = direct || `http://localhost${endpoint}`;
   try {
-    await axios.get(`http://localhost${endpoint}`, {
+    await axios.get(url, {
       timeout: 5000,
       validateStatus: () => true, // any HTTP response = service is reachable
       headers: noAuth ? {} : { Authorization: `Bearer ${token}` },
@@ -58,7 +61,7 @@ export function useServices() {
     queryKey: ['services-health'],
     queryFn: async () => {
       const results = await Promise.allSettled(
-        SERVICES.map((svc) => checkService(svc.name, svc.endpoint, svc.noAuth))
+        SERVICES.map((svc) => checkService(svc.name, svc.endpoint, svc.noAuth, svc.direct))
       );
       return results.map((result, i) => {
         if (result.status === 'fulfilled') return result.value;

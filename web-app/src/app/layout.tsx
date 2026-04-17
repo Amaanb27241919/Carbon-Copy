@@ -7,15 +7,15 @@ import { ToastContainer } from '@/components/Toast';
 import { NavVisibility } from '@/components/NavVisibility';
 
 export const metadata: Metadata = {
-  title: 'Carbon Cloud',
-  description: 'AI Cloud Infrastructure Control Panel',
+  title: 'Carbon Core',
+  description: 'Secure self-hosted AI build & deploy platform',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
     title: 'Carbon',
   },
-  applicationName: 'Carbon Cloud',
+  applicationName: 'Carbon Core',
   formatDetection: {
     telephone: false,
   },
