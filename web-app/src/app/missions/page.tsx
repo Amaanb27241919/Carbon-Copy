@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Target, Plus, CheckCircle, Clock, XCircle, Loader2, DollarSign, Zap } from 'lucide-react';
-import { ariaApi, AriaMission } from '@/lib/api';
+import { coreApi, AriaMission } from '@/lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { cn, timeAgo } from '@/lib/utils';
 
@@ -28,6 +28,19 @@ function MissionCard({ mission }: { mission: AriaMission }) {
           {cfg.label}
         </span>
       </div>
+
+      {(mission.mode || (mission.agent_count ?? 0) > 0) && (
+        <div className="flex items-center gap-2 text-xs">
+          {mission.mode && (
+            <span className="px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 font-medium capitalize">
+              {mission.mode}
+            </span>
+          )}
+          {(mission.agent_count ?? 0) > 0 && (
+            <span className="text-slate-500">{mission.agent_count} agent{mission.agent_count !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+      )}
 
       <div className="flex items-center gap-4 text-xs text-slate-500">
         <span className="flex items-center gap-1">
@@ -55,7 +68,7 @@ export default function MissionsPage() {
 
   const { data: missions = [], isLoading, refetch } = useQuery<AriaMission[]>({
     queryKey: ['missions', statusFilter],
-    queryFn: () => ariaApi.getMissions({ status: statusFilter || undefined, limit: 50 }),
+    queryFn: () => coreApi.getMissions({ status: statusFilter || undefined, limit: 50 }),
     refetchInterval: 10_000,
   });
 

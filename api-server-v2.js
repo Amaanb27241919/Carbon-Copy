@@ -261,7 +261,8 @@ app.post('/api/v2/missions', (req, res) => {
   const { goal, mode, context } = req.body;
   if (!goal) return res.status(400).json({ error: 'goal required' });
   try {
-    const result = orchestratePhased({ task: goal, options: { mode: mode || 'phased', context } });
+    const resolvedMode = ['parallel', 'sequential', 'hierarchical', 'pipeline'].includes(mode) ? mode : 'parallel';
+    const result = orchestrate({ task: goal, agents: [], mode: resolvedMode, options: { context } });
     res.json({ missionId: result.runId || result.id, status: 'running' });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });

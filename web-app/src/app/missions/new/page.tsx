@@ -2,39 +2,31 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { ArrowLeft, Send, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { ariaApi, Blueprint } from '@/lib/api';
+import { coreApi } from '@/lib/api';
 import { PageHeader } from '@/components/PageHeader';
 import { toast } from '@/components/Toast';
 import { getErrorMessage } from '@/lib/utils';
 
-// Default client ID — in a real deployment this comes from auth context
-const DEFAULT_CLIENT_ID = '00000000-0000-0000-0000-000000000001';
+const MODES = [
+  { value: 'phased', label: 'Phased', description: 'Sequential agent phases (recommended)' },
+  { value: 'parallel', label: 'Parallel', description: 'All agents run concurrently' },
+  { value: 'sequential', label: 'Sequential', description: 'One agent at a time, in order' },
+] as const;
 
 export default function NewMissionPage() {
   const router = useRouter();
   const [goal, setGoal] = useState('');
   const [context, setContext] = useState('');
-  const [selectedBlueprint, setSelectedBlueprint] = useState('');
-
-  const { data: blueprints = [] } = useQuery<Blueprint[]>({
-    queryKey: ['blueprints'],
-    queryFn: () => ariaApi.getBlueprints(),
-    staleTime: 300_000,
-  });
+  const [mode, setMode] = useState<'phased' | 'parallel' | 'sequential'>('phased');
 
   const submitMutation = useMutation({
     mutationFn: () =>
-      ariaApi.createMission({
-        clientId: DEFAULT_CLIENT_ID,
-        goal: goal.trim(),
-        context: context.trim(),
-        blueprintId: selectedBlueprint || undefined,
-      }),
+      coreApi.createMission({ goal: goal.trim(), mode, context: context.trim() || undefined }),
     onSuccess: (data) => {
-      toast('success', `Mission submitted — ID: ${data.missionId.slice(0, 8)}...`);
+      toast('success', `Mission submitted — ID: ${(data.missionId || '').slice(0, 8)}...`);
       router.push('/missions');
     },
     onError: (err) => toast('error', getErrorMessage(err)),
@@ -42,19 +34,11 @@ export default function NewMissionPage() {
 
   const canSubmit = goal.trim().length > 0 && !submitMutation.isPending;
 
-  // Group blueprints by category
-  const byCategory = blueprints.reduce<Record<string, Blueprint[]>>((acc, bp) => {
-    const cat = bp.category || 'General';
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(bp);
-    return acc;
-  }, {});
-
   return (
     <div className="min-h-screen pb-nav">
       <PageHeader
         title="New Mission"
-        subtitle="Submit a research mission to ARIA"
+        subtitle="Submit a task to Carbon Core orchestration"
         actions={
           <Link href="/missions" className="btn-secondary p-2.5">
             <ArrowLeft className="w-4 h-4" />
@@ -66,12 +50,12 @@ export default function NewMissionPage() {
         {/* Goal */}
         <div className="space-y-1.5">
           <label className="label" htmlFor="mission-goal">
-            Research Goal <span className="text-red-400">*</span>
+            Mission Goal <span className="text-red-400">*</span>
           </label>
           <textarea
             id="mission-goal"
             className="input resize-none min-h-[100px]"
-            placeholder="e.g. Analyse the competitive landscape for AI-powered CRMs in the mid-market segment..."
+            placeholder="e.g. Research the competitive landscape for AI-powered CRMs in the mid-market segment..."
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             rows={4}
@@ -79,27 +63,34 @@ export default function NewMissionPage() {
           <p className="text-xs text-slate-600">{goal.length} / 2000 characters</p>
         </div>
 
-        {/* Blueprint selector */}
+        {/* Mode selector */}
         <div className="space-y-1.5">
-          <label className="label" htmlFor="blueprint-select">
-            Blueprint (optional)
-          </label>
-          <select
-            id="blueprint-select"
-            className="input"
-            value={selectedBlueprint}
-            onChange={(e) => setSelectedBlueprint(e.target.value)}
-          >
-            <option value="">Auto-select blueprint</option>
-            {Object.entries(byCategory).map(([cat, bps]) => (
-              <optgroup key={cat} label={cat}>
-                {bps.map(bp => (
-                  <option key={bp.id} value={bp.name}>{bp.name.replace(/_/g, ' ')}</option>
-                ))}
-              </optgroup>
+          <label className="label">Execution Mode</label>
+          <div className="space-y-2">
+            {MODES.map((m) => (
+              <label
+                key={m.value}
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                  mode === m.value
+                    ? 'border-indigo-500 bg-indigo-900/20'
+                    : 'border-slate-700 bg-slate-800/40 hover:border-slate-600'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="mode"
+                  value={m.value}
+                  checked={mode === m.value}
+                  onChange={() => setMode(m.value)}
+                  className="mt-0.5 accent-indigo-500"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-slate-200">{m.label}</p>
+                  <p className="text-xs text-slate-500">{m.description}</p>
+                </div>
+              </label>
             ))}
-          </select>
-          <p className="text-xs text-slate-600">Blueprints guide the research structure and output format</p>
+          </div>
         </div>
 
         {/* Additional context */}
@@ -137,7 +128,7 @@ export default function NewMissionPage() {
         </button>
 
         <p className="text-xs text-slate-600 text-center">
-          ARIA will run through scan → research → synthesis agents. Results appear in Missions.
+          Carbon Core will orchestrate agents to complete your mission. Results appear in Missions.
         </p>
       </div>
     </div>
