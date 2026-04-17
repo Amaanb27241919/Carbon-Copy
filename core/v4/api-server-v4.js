@@ -116,20 +116,20 @@ registerBudgetDb({
     try {
       const row = db.prepare(
         `SELECT COALESCE(SUM(cost_usd), 0) AS total
-         FROM cc_heartbeat_runs
+         FROM heartbeat_runs
          WHERE agent_id = ? AND started_at > (strftime('%s','now') - ?)`
       ).get(agentId, windowSeconds);
       return row?.total || 0;
     } catch { return 0; }
   },
   getPolicies: () => {
-    try { return db.prepare('SELECT * FROM cc_budget_policies').all(); }
+    try { return db.prepare('SELECT * FROM budget_policies').all(); }
     catch { return []; }
   },
 });
 
 const _saveRunStmt = db.prepare(`
-  INSERT OR IGNORE INTO cc_heartbeat_runs
+  INSERT OR IGNORE INTO heartbeat_runs
     (id, agent_id, invocation_source, status, prompt_preview,
      input_tokens, output_tokens, cache_tokens, cost_usd, duration_ms,
      exit_code, error, model, started_at, completed_at)
@@ -139,7 +139,7 @@ const _saveRunStmt = db.prepare(`
      @exit_code, @error, @model, @started_at, @completed_at)
 `);
 const _updateRunStmt = db.prepare(`
-  UPDATE cc_heartbeat_runs
+  UPDATE heartbeat_runs
   SET status=@status, cost_usd=@cost_usd, duration_ms=@duration_ms,
       exit_code=@exit_code, error=@error, completed_at=@completed_at
   WHERE id=@id
@@ -148,13 +148,13 @@ registerHeartbeatDb({
   saveRun:       (r) => _saveRunStmt.run(r),
   updateRun:     (r) => _updateRunStmt.run(r),
   loadActiveRuns: () => {
-    try { return db.prepare(`SELECT * FROM cc_heartbeat_runs WHERE status='running'`).all(); }
+    try { return db.prepare(`SELECT * FROM heartbeat_runs WHERE status='running'`).all(); }
     catch { return []; }
   },
 });
 
 const _writeLogStmt = db.prepare(`
-  INSERT OR IGNORE INTO cc_activity_log
+  INSERT OR IGNORE INTO activity_log
     (id, actor_type, actor_id, action_type, entity_type, entity_id, detail, created_at)
   VALUES
     (@id, @actor_type, @actor_id, @action_type, @entity_type, @entity_id, @detail, @created_at)
