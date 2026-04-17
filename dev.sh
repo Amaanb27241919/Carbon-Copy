@@ -1,37 +1,35 @@
 #!/bin/bash
-# Carbon Core — Local Dev Launcher
+# Carbon Core — Dev Launcher
+# Uses pm2 to keep both services alive automatically.
 # Usage: bash dev.sh
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 
+echo "🧠 Starting Carbon Core via pm2..."
+
 # Kill anything on our ports first
-echo "🧹 Clearing ports 3001 and 3006..."
-lsof -ti :3001 | xargs kill -9 2>/dev/null
-lsof -ti :3006 | xargs kill -9 2>/dev/null
+lsof -ti tcp:3001 | xargs kill -9 2>/dev/null
+lsof -ti tcp:3006 | xargs kill -9 2>/dev/null
 sleep 1
 
-echo "🧠 Starting Carbon Core API (port 3001)..."
-node "$REPO/api-server-v2.js" &
-API_PID=$!
-sleep 1
-
-# Verify API started
-if ! curl -s http://localhost:3001/api/v2/ping > /dev/null 2>&1; then
-  echo "⚠️  API still starting..."
-  sleep 2
+# Start or restart via pm2
+if pm2 list 2>/dev/null | grep -q "carbon-core"; then
+  pm2 restart ecosystem.config.js
+else
+  pm2 start ecosystem.config.js
 fi
 
-echo "🌐 Starting web app (port 3006)..."
-cd "$REPO/web-app" && npm run dev &
-WEB_PID=$!
+sleep 4
+pm2 list
 
 echo ""
-echo "✅ Carbon Core dev running:"
+echo "✅ Carbon Core running:"
 echo "   API:  http://localhost:3001/api/v2/ping"
 echo "   App:  http://localhost:3006/app"
-echo "   Core: http://localhost:3006/app/core"
+echo "   VMs:  http://localhost:3006/app/vms"
 echo ""
-echo "Press Ctrl+C to stop both."
-
-trap "echo ''; echo 'Stopping...'; kill $API_PID $WEB_PID 2>/dev/null; lsof -ti :3001 :3006 | xargs kill -9 2>/dev/null; exit" INT TERM
-wait
+echo "Commands:"
+echo "   pm2 list          — check status"
+echo "   pm2 logs          — view live logs"
+echo "   pm2 stop all      — stop everything"
+echo "   pm2 restart all   — restart everything"
