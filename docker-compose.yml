@@ -462,7 +462,9 @@ services:
     environment:
       PORT: "3006"
       NEXT_PUBLIC_API_URL: "/api"
-      NEXT_PUBLIC_APP_NAME: "Carbon Cloud"
+      NEXT_PUBLIC_APP_NAME: "Carbon Core"
+      NEXT_PUBLIC_CORE_API_URL: "/app/core-api"
+      CORE_API_URL: "http://carbon-core:3001"
     depends_on:
       gateway:
         condition: service_healthy
