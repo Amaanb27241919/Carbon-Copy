@@ -55,6 +55,7 @@ const {
 const { generateProposal } = require('./core/proposal-service.js');
 const { getVMStatusSummary } = require('./core/vm-manager-client.js');
 const utm = require('./core/utm-client.js');
+
 const { chat: modelChat, getProviders, getLocalModels, pullLocalModel } = require('./core/model-router-client.js');
 const { getAllExpertAgents, findBestAgent } = require('./core/expert-agents.js');
 const { startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops } = require('./core/ralph-loop.js');
@@ -321,6 +322,10 @@ app.post('/api/v2/vms/utm/:uuid/start', async (req, res) => {
 });
 app.post('/api/v2/vms/utm/:uuid/stop', async (req, res) => {
   try { res.json(await utm.stopUTMVM(req.params.uuid, req.body?.force)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post('/api/v2/vms/utm/:uuid/shutdown', async (req, res) => {
+  try { res.json(await utm.shutdownUTMVM(req.params.uuid)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 app.delete('/api/v2/vms/utm/:uuid', async (req, res) => {

@@ -115,6 +115,14 @@ async function stopUTMVM(uuid, force = false) {
   return { success: status === 'stopped' || status === null, status, message: 'VM stopped' };
 }
 
+// Graceful shutdown — sends power-off signal to the guest OS (like pressing power button)
+async function shutdownUTMVM(uuid) {
+  await utmctl('stop', uuid, '--request');
+  await new Promise(r => setTimeout(r, 2000));
+  const status = await getUTMVMStatus(uuid);
+  return { success: status === 'stopped' || status === null, status, message: 'Shutdown requested — VM will power off gracefully' };
+}
+
 async function suspendUTMVM(uuid) {
   const result = await utmctl('suspend', uuid);
   return { success: result !== null };
@@ -186,6 +194,7 @@ module.exports = {
   getUTMStatus,
   startUTMVM,
   stopUTMVM,
+  shutdownUTMVM,
   suspendUTMVM,
   deleteUTMVM,
   cloneUTMVM,

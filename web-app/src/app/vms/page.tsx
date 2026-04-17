@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Server, Plus, Play, Square, Trash2, Monitor, ExternalLink, X, Loader2 } from 'lucide-react';
+import { Server, Plus, Play, Square, PowerOff, Trash2, Monitor, ExternalLink, X, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
 import { toast } from '@/components/Toast';
@@ -41,9 +41,9 @@ interface VM {
   screenshot_url?: string; vnc_url?: string;
 }
 
-function VMCard({ vm, onStart, onStop, onDelete, loading }: {
+function VMCard({ vm, onStart, onStop, onShutdown, onDelete, loading }: {
   vm: VM;
-  onStart: () => void; onStop: () => void; onDelete: () => void;
+  onStart: () => void; onStop: () => void; onShutdown: () => void; onDelete: () => void;
   loading: boolean;
 }) {
   const os = OS_STYLES[vm.os_display] || OS_STYLES.Linux;
@@ -79,11 +79,18 @@ function VMCard({ vm, onStart, onStop, onDelete, loading }: {
               Stop
             </button>
             {vm.running && (
-              <a href="utm://" 
-                onClick={(e) => { e.preventDefault(); window.open('utm://', '_blank'); }}
-                className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
-                <Monitor className="w-3 h-3" /> Open UTM
-              </a>
+              <>
+                <button onClick={onShutdown} disabled={loading}
+                  title="Graceful shutdown (sends power-off signal to OS)"
+                  className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3 text-amber-400 border-amber-700/40 hover:bg-amber-900/20">
+                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <PowerOff className="w-3 h-3" />}
+                  Shutdown
+                </button>
+                <a href="utm://" onClick={(e) => { e.preventDefault(); window.open('utm://', '_blank'); }}
+                  className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
+                  <Monitor className="w-3 h-3" /> Open UTM
+                </a>
+              </>
             )}
           </>
         )}
@@ -252,7 +259,8 @@ export default function VMsPage() {
                 vm={vm}
                 loading={loadingId === vm.id}
                 onStart={() => vmAction(vm.id, () => fetch(`${CORE_API}/vms/${vm.provider === 'utm' ? 'utm/' : ''}${vm.id}/start`, { method: 'POST' }))}
-                onStop={() => vmAction(vm.id, () => fetch(`${CORE_API}/vms/${vm.provider === 'utm' ? 'utm/' : ''}${vm.id}/stop`, { method: 'POST' }))}
+                onStop={() => vmAction(vm.id, () => fetch(`${CORE_API}/vms/${vm.provider === 'utm' ? 'utm/' : ''}${vm.id}/stop`, { method: 'POST', body: JSON.stringify({ force: true }), headers: { 'Content-Type': 'application/json' } }))}
+                onShutdown={() => vmAction(vm.id, () => fetch(`${CORE_API}/vms/utm/${vm.id}/shutdown`, { method: 'POST' }))}
                 onDelete={() => {
                   if (confirm(`Delete "${vm.name}"?`)) {
                     vmAction(vm.id, () => fetch(`${CORE_API}/vms/${vm.provider === 'utm' ? 'utm/' : ''}${vm.id}`, { method: 'DELETE' }));

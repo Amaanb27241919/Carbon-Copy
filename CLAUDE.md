@@ -1,40 +1,43 @@
-# CLAUDE.md — Carbon-Copy v2 Development Guide
+# CLAUDE.md — Carbon Core Development Guide
 
-_Last updated: April 11, 2026, 1:00 AM CT_
+_Last updated: April 16, 2026_
 
 ---
 
 ## What This Is
 
-Carbon-Copy v2 is a self-hosted Docker platform:
-- **AI Intelligence Platform** (ARIA — 5-agent research, WatchDog, Dossier, Blueprints)
-- **AI Cloud** (model router: Ollama local + Claude/OpenAI/HuggingFace)
-- **Homelab** (Samba, Syncthing, Immich, Tailscale, Pi-hole)
-- **Data Server** (PostgreSQL + pgvector + MinIO S3 + Redis)
-- **iPhone/iPad PWA** (Next.js, installable from Safari)
+Carbon Core is a secure self-hosted AI project build and deployment platform:
+- **VM Management** — UTM (Apple Silicon native: macOS, Windows ARM, Linux) + Docker KVM
+- **AI Intelligence** — ARIA 5-agent research pipeline, WatchDog, Dossier, 88 blueprints
+- **Model Routing** — local-first (Ollama → Claude → OpenAI), budget-governed
+- **Multi-Agent Orchestration** — parallel/sequential/hierarchical/pipeline/phased
+- **18 Expert Agents** — executor, verifier, planner, architect, debugger, and more
+- **iPhone/iPad PWA** — Next.js, installable from Safari
+- **Budget Governance** — per-agent spend limits, auto-pause, audit trail
 
 ---
 
-## Current Status (Apr 11, 2026)
+## Current Status (Apr 16, 2026)
 
-### ✅ Working
-- http://localhost/app — full dashboard, auto-login (dev bypass)
-- 9/9 services operational (gateway, auth, data, vm, openclaw, nemoclaw, model-router, sandbox, ARIA)
-- ARIA: missions, agents, blueprints, watchdog, dossier all wired end-to-end
-- PostgreSQL ARIA schema live (05_aria.sql applied)
-- Web-app: Dashboard, Missions, Chat, Agents, WatchDog, Dossier, Blueprints, Budget pages
-- Model router: Ollama + Claude + OpenAI + HuggingFace all routable
-- Committed + pushed: https://github.com/Amaanb27241919/Carbon-Copy
+### ✅ Working (without Docker — `bash dev.sh`)
+- `http://localhost:3006/app` — full dashboard
+- Carbon Core API: `http://localhost:3001/api/v2/ping`
+- Chat, Models, Missions, Agents, Core, VMs pages all functional
+- UTM VM management: start/shutdown/stop/delete via utmctl
+- macOS VM detected and controllable from web UI
 
-### ⚠️ Known Issues (ARM Mac)
-| Issue | Status | Notes |
-|---|---|---|
-| code-server crashing | Expected | x86 binary, disabled in nginx (returns 503) |
-| ollama `unhealthy` | Expected | No GPU on M-series, works via CPU |
-| nginx/web-app `unhealthy` | False alarm | Health check misconfigured, actually serving |
+### ✅ Working (with Docker — `docker compose up`)
+- All 8+ services operational
+- ARIA research pipeline, WatchDog, Dossier
+- PostgreSQL persistence, MinIO storage
+- Auto-login with admin/OmniFlow2026!
 
-### 🔨 In Progress / Next
-See **Backlog** section below.
+### 🏗️ Key directories
+- `core/` — Carbon Core v3 services (21 JS files)
+- `web-app/` — Next.js PWA frontend
+- `aria-service/` — ARIA intelligence Docker service
+- `model-router/` — Multi-provider AI routing
+- `kvm-manager/` — Docker KVM VM management
 
 ---
 
