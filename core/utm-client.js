@@ -64,7 +64,7 @@ function mapVM({ uuid, status, name }) {
     ram_mb: 0,
     disk_gb: 0,
     ssh_port: null,
-    vnc_url: null,
+    vnc_url: `http://localhost:8080`,  // UTM web console (SPICE over HTTP)
     screenshot_url: null,
     platform: 'apple-silicon',
   };
