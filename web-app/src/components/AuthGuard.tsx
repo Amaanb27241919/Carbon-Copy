@@ -15,22 +15,41 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [ready, setReady] = React.useState(isAuthenticated);
 
   useEffect(() => {
+    // Check if already authenticated from persisted state
+    const stored = localStorage.getItem('carbon-auth');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.state?.token && parsed?.state?.isAuthenticated) {
+          setReady(true);
+          return; // Already logged in from previous session
+        }
+      } catch {}
+    }
+
     if (isAuthenticated) { setReady(true); return; }
+
+    // Auto-login
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
     fetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'OmniFlow2026!' }),
       signal: controller.signal,
     })
-      .then(r => r.json())
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
       .then(data => {
-        if (data.accessToken) { login(data.accessToken, data.user); }
-        setReady(true);
+        if (data.accessToken) {
+          login(data.accessToken, data.user);
+        }
       })
-      .catch(() => setReady(true))
-      .finally(() => clearTimeout(timeout));
+      .catch(() => {}) // Silent fail — show app without auth
+      .finally(() => {
+        clearTimeout(timeout);
+        setReady(true);
+      });
   }, []);
 
   if (!ready) return (

@@ -7,7 +7,7 @@ import { RefreshCw, Database, Cpu, HardDrive, Activity, Target, CheckCircle, Clo
 import { useServices } from '@/hooks/useServices';
 import { ServiceCard, ServiceCardSkeleton } from '@/components/ServiceCard';
 import { PageHeader } from '@/components/PageHeader';
-import { api, StorageStats, ariaApi, AriaMission, AriaAgent, AriaBudget } from '@/lib/api';
+import { api, StorageStats, coreApi, AriaMission, AriaBudget } from '@/lib/api';
 import { cn, formatBytes, timeAgo } from '@/lib/utils';
 
 interface SystemStats {
@@ -67,20 +67,36 @@ function useSystemStats() {
 function useAriaData() {
   const missions = useQuery<AriaMission[]>({
     queryKey: ['missions-recent'],
-    queryFn: () => ariaApi.getMissions({ limit: 3 }),
+    queryFn: () => coreApi.getMissions().then(m => m.slice(0, 3)),
     refetchInterval: 30_000,
     staleTime: 15_000,
   });
-  const agents = useQuery<AriaAgent[]>({
-    queryKey: ['agents'],
-    queryFn: ariaApi.getAgents,
+
+  const agents = useQuery({
+    queryKey: ['agents-summary'],
+    queryFn: () => coreApi.getAgents(),
     refetchInterval: 15_000,
   });
+
   const budget = useQuery<AriaBudget>({
-    queryKey: ['budget'],
-    queryFn: ariaApi.getBudget,
+    queryKey: ['core-budget'],
+    queryFn: async () => {
+      const res = await fetch('/app/core-api/budget');
+      const data = await res.json();
+      return {
+        limits: { dailyUSD: 50, monthlyUSD: 1000 },
+        today: {
+          tokensUsed: 0,
+          costUSD: (data.recent_incidents as Array<{ current_spend: number }> | undefined)?.reduce((s, i) => s + i.current_spend, 0) ?? 0,
+          missionsRun: (data.total_incidents as number) || 0,
+        },
+        month: { tokensUsed: 0, costUSD: 0, missionsRun: 0 },
+        utilization: { dailyPct: 0, monthlyPct: 0 },
+      };
+    },
     refetchInterval: 60_000,
   });
+
   return { missions, agents, budget };
 }
 
@@ -315,10 +331,10 @@ export default function DashboardPage() {
                 <span className="text-slate-500">Agent status</span>
                 <span className={cn(
                   'font-semibold',
-                  ariaAgents.data.some(a => a.status !== 'idle') ? 'text-blue-400' : 'text-green-400'
+                  (ariaAgents.data.active_runs?.length ?? 0) > 0 ? 'text-blue-400' : 'text-green-400'
                 )}>
-                  {ariaAgents.data.some(a => a.status !== 'idle')
-                    ? `${ariaAgents.data.filter(a => a.status !== 'idle').length} active`
+                  {(ariaAgents.data.active_runs?.length ?? 0) > 0
+                    ? `${ariaAgents.data.active_runs.length} active`
                     : 'All idle'}
                 </span>
               </div>
