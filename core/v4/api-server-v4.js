@@ -74,6 +74,12 @@ const {
   getCategories: knowledgeCategories,
   getStats:      knowledgeStats,
 } = require('../knowledge-service.js');
+const { KnowledgeSearch } = require('./knowledge-search.js');
+let _ksInstance = null;
+function getKS() {
+  if (!_ksInstance) _ksInstance = new KnowledgeSearch(db);
+  return _ksInstance;
+}
 const {
   startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops,
 } = require('../ralph-loop.js');
@@ -467,23 +473,53 @@ app.delete('/api/v4/ralph/:loopId', authMiddleware, (req, res) => {
 
 // Knowledge ────────────────────────────────────────────────────────────
 
-app.get('/api/v4/knowledge/search', authMiddleware, (req, res) => {
+app.get('/api/v4/knowledge/search', authMiddleware, async (req, res) => {
   const { q, domain, limit = '10' } = req.query;
   if (!q || typeof q !== 'string' || !q.trim()) {
     return res.status(400).json({ error: 'q (search query) is required' });
   }
-  const result = knowledgeSearch(q, {
-    category: domain || null,
-    limit:    Math.min(parseInt(limit, 10) || 10, 50),
-  });
-  logSystemAction(ActionTypes.KNOWLEDGE_QUERIED, 'knowledge', q.slice(0, 80), {
-    domain, results: result.total,
-  });
-  res.json(result);
+  try {
+    // Try knowledge-search.js (knowledge_chunks table) first
+    const ks = getKS();
+    const chunks = await ks.search(q, {
+      domain: domain || null,
+      limit: Math.min(parseInt(limit, 10) || 10, 50),
+    });
+    if (chunks && chunks.length > 0) {
+      logSystemAction(ActionTypes.KNOWLEDGE_QUERIED, 'knowledge', q.slice(0, 80), { domain, results: chunks.length });
+      return res.json({ results: chunks, total: chunks.length, source: 'knowledge_chunks' });
+    }
+    // Fallback to knowledge-service.js (knowledge_docs table)
+    const result = knowledgeSearch(q, { category: domain || null, limit: Math.min(parseInt(limit, 10) || 10, 50) });
+    logSystemAction(ActionTypes.KNOWLEDGE_QUERIED, 'knowledge', q.slice(0, 80), { domain, results: result.total });
+    res.json({ ...result, source: 'knowledge_docs' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get('/api/v4/knowledge/domains', authMiddleware, (_req, res) => {
-  res.json({ domains: knowledgeCategories(), stats: knowledgeStats() });
+app.get('/api/v4/knowledge/domains', authMiddleware, async (_req, res) => {
+  try {
+    const ks = getKS();
+    const domains = await ks.listDomains();
+    // Also get legacy stats
+    const legacyStats = knowledgeStats();
+    res.json({ domains, legacy: legacyStats });
+  } catch (e) {
+    res.json({ domains: [], legacy: knowledgeStats(), error: e.message });
+  }
+});
+
+app.post('/api/v4/knowledge/ingest', authMiddleware, async (req, res) => {
+  const { path: dirPath, domain = 'general' } = req.body;
+  if (!dirPath) return res.status(400).json({ error: 'path is required' });
+  try {
+    const ks = getKS();
+    const result = await ks.ingestDirectory(dirPath, domain);
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Skills ───────────────────────────────────────────────────────────────

@@ -217,31 +217,36 @@ class KnowledgeSearch {
   // ── Private ─────────────────────────────────────────────────────────
 
   async _ftsSearch(query, domain, limit) {
+    // Sanitize query for FTS5: wrap in quotes for phrase search, fallback to AND terms
+    const ftsQuery = query.includes(' ')
+      ? `"${query.replace(/"/g, '')}"`
+      : query.replace(/[^\w\s]/g, '');
+    if (!ftsQuery.trim()) return [];
     let sql, params;
 
     if (domain) {
       sql = `
         SELECT kc.id, kc.source_file, kc.domain, kc.title, kc.tags,
-               kc.content, kc.chunk_index, fts.rank AS score
-        FROM   knowledge_chunks_fts fts
-        JOIN   knowledge_chunks kc ON kc.rowid = fts.rowid
-        WHERE  fts MATCH ?
+               kc.content, kc.chunk_index, knowledge_chunks_fts.rank AS score
+        FROM   knowledge_chunks_fts
+        JOIN   knowledge_chunks kc ON kc.rowid = knowledge_chunks_fts.rowid
+        WHERE  knowledge_chunks_fts MATCH ?
           AND  kc.domain = ?
-        ORDER  BY fts.rank
+        ORDER  BY knowledge_chunks_fts.rank
         LIMIT  ?
       `;
-      params = [query, domain, limit];
+      params = [ftsQuery, domain, limit];
     } else {
       sql = `
         SELECT kc.id, kc.source_file, kc.domain, kc.title, kc.tags,
-               kc.content, kc.chunk_index, fts.rank AS score
-        FROM   knowledge_chunks_fts fts
-        JOIN   knowledge_chunks kc ON kc.rowid = fts.rowid
-        WHERE  fts MATCH ?
-        ORDER  BY fts.rank
+               kc.content, kc.chunk_index, knowledge_chunks_fts.rank AS score
+        FROM   knowledge_chunks_fts
+        JOIN   knowledge_chunks kc ON kc.rowid = knowledge_chunks_fts.rowid
+        WHERE  knowledge_chunks_fts MATCH ?
+        ORDER  BY knowledge_chunks_fts.rank
         LIMIT  ?
       `;
-      params = [query, limit];
+      params = [ftsQuery, limit];
     }
 
     const rows = await _all(this.db, sql, params);
