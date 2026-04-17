@@ -78,10 +78,11 @@ function VMCard({ vm, onStart, onStop, onDelete, loading }: {
               {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Square className="w-3 h-3" />}
               Stop
             </button>
-            {vm.vnc_url && (
-              <a href={vm.vnc_url} target="_blank" rel="noreferrer"
+            {vm.running && (
+              <a href="utm://" 
+                onClick={(e) => { e.preventDefault(); window.open('utm://', '_blank'); }}
                 className="btn-secondary text-xs flex items-center gap-1.5 py-1.5 px-3">
-                <Monitor className="w-3 h-3" /> Console
+                <Monitor className="w-3 h-3" /> Open UTM
               </a>
             )}
           </>
