@@ -31,21 +31,55 @@ async function checkService(
   // All calls go through Next.js proxy — works in both standalone and Docker mode
   const url = `http://localhost:3006/app${endpoint}`;
   try {
-    await axios.get(url, {
+    const response = await axios.get(url, {
       timeout: 5000,
-      validateStatus: () => true, // any HTTP response = service is reachable
+      validateStatus: () => true, // capture all HTTP responses for inspection
       headers: noAuth ? {} : { Authorization: `Bearer ${token}` },
     });
+
+    const contentType = (response.headers['content-type'] as string) || '';
+    const isHtml = contentType.includes('text/html');
+    const isJson = contentType.includes('application/json');
+
+    // Next.js is intercepting the request (serving its own 404 HTML page)
+    // — the real service is not running behind the proxy
+    if (isHtml) {
+      return {
+        name,
+        url: endpoint,
+        status: dockerOnly ? 'offline' : 'down',
+        lastChecked: new Date(),
+        responseTime: Date.now() - start,
+        dockerOnly,
+      };
+    }
+
+    // Carbon Core (/core-api/*): confirm the service replies with {"ok":true}
+    if (!dockerOnly) {
+      const body = response.data as Record<string, unknown>;
+      const isUp = isJson && response.status >= 200 && response.status < 300 && body?.ok === true;
+      return {
+        name,
+        url: endpoint,
+        status: isUp ? 'up' : 'down',
+        lastChecked: new Date(),
+        responseTime: Date.now() - start,
+        dockerOnly,
+      };
+    }
+
+    // Docker-only services: JSON 2xx = up, anything else = offline
+    const isUp = isJson && response.status >= 200 && response.status < 300;
     return {
       name,
       url: endpoint,
-      status: 'up',
+      status: isUp ? 'up' : 'offline',
       lastChecked: new Date(),
       responseTime: Date.now() - start,
       dockerOnly,
     };
   } catch {
-    // Docker-only services that fail are expected when Docker is not running
+    // Network-level failure (timeout, ECONNREFUSED, etc.)
     return {
       name,
       url: endpoint,
