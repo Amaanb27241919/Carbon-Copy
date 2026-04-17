@@ -53,7 +53,7 @@ export default function BlueprintsPage() {
 
   const { data: blueprints = [], isLoading } = useQuery<Blueprint[]>({
     queryKey: ['blueprints'],
-    queryFn: ariaApi.getBlueprints,
+    queryFn: () => ariaApi.getBlueprints(),
     staleTime: 300_000,
   });
 

@@ -21,7 +21,7 @@ export default function NewMissionPage() {
 
   const { data: blueprints = [] } = useQuery<Blueprint[]>({
     queryKey: ['blueprints'],
-    queryFn: ariaApi.getBlueprints,
+    queryFn: () => ariaApi.getBlueprints(),
     staleTime: 300_000,
   });
 
