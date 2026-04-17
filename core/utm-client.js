@@ -2,125 +2,177 @@
 
 /**
  * UTM Client — Carbon Core
- * Wraps UTM REST API for Apple Silicon VM management.
- * UTM uses Apple Virtualization Framework — runs macOS, Windows ARM, Linux natively.
+ * Controls UTM VMs via `utmctl` CLI (bundled inside UTM.app).
+ * No REST API needed — utmctl is the official CLI interface.
  *
- * Enable in UTM: Settings → Server → Enable (port 8080)
+ * utmctl path: /Applications/UTM.app/Contents/MacOS/utmctl
  */
 
-const UTM_URL = process.env.UTM_API_URL || 'http://localhost:8080/api';
-const TIMEOUT_MS = 3000;
+const { execFile } = require('child_process');
+const { promisify } = require('util');
 
-// ── Base request ────────────────────────────────────────────────────
+const execFileAsync = promisify(execFile);
+const UTMCTL = '/Applications/UTM.app/Contents/MacOS/utmctl';
+const TIMEOUT_MS = 10000;
 
-async function utmRequest(method, path, body) {
+// ── Base runner ─────────────────────────────────────────────────────
+
+async function utmctl(...args) {
   try {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
-    const res = await fetch(`${UTM_URL}${path}`, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : {},
-      body: body ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : {};
-  } catch {
+    const { stdout } = await execFileAsync(UTMCTL, args, { timeout: TIMEOUT_MS });
+    return stdout.trim();
+  } catch (e) {
+    // UTM not installed or not running
     return null;
   }
 }
 
-// ── Status helpers ──────────────────────────────────────────────────
+// ── Availability ─────────────────────────────────────────────────────
 
-function mapUTMStatus(status) {
-  const map = { started: 'running', stopped: 'stopped', starting: 'starting', stopping: 'stopping', paused: 'stopped' };
-  return map[status] || 'stopped';
+async function isUTMAvailable() {
+  const result = await utmctl('version');
+  return result !== null;
 }
 
-function detectOSDisplay(vm) {
-  const name = (vm.name || '').toLowerCase();
-  if (name.includes('macos') || name.includes('mac os') || name.includes('sonoma') || name.includes('ventura') || name.includes('monterey')) return 'macOS';
-  if (name.includes('windows') || name.includes('win11') || name.includes('win10')) return 'Windows';
-  if (name.includes('ubuntu')) return 'Ubuntu';
-  if (name.includes('debian')) return 'Debian';
-  if (name.includes('alpine')) return 'Alpine';
-  if (name.includes('fedora')) return 'Fedora';
-  return vm.configuration?.operatingSystem || 'Linux';
+// ── List VMs ─────────────────────────────────────────────────────────
+
+async function listUTMVMs() {
+  const output = await utmctl('list');
+  if (!output) return [];
+
+  const lines = output.split('\n').filter(l => l.trim() && !l.startsWith('UUID'));
+  return lines.map(line => {
+    // Format: UUID   Status   Name
+    const parts = line.trim().split(/\s+/);
+    const uuid = parts[0];
+    const status = parts[1]?.toLowerCase() || 'stopped';
+    const name = parts.slice(2).join(' ');
+    return mapVM({ uuid, status, name });
+  }).filter(v => v.id);
 }
 
-function mapToVMShape(vm) {
+function mapVM({ uuid, status, name }) {
   return {
-    id: vm.uuid || vm.id,
-    name: vm.name,
+    id: uuid,
+    name: name || uuid,
     provider: 'utm',
-    os: vm.configuration?.operatingSystem || 'linux',
-    os_display: detectOSDisplay(vm),
-    status: mapUTMStatus(vm.status),
-    running: vm.status === 'started',
-    cpus: vm.configuration?.cpu?.cpuCount || 0,
-    ram_mb: Math.round((vm.configuration?.memory?.memorySize || 0) / 1024 / 1024),
+    os: detectOS(name),
+    os_display: detectOSDisplay(name),
+    status: mapStatus(status),
+    running: status === 'started' || status === 'running',
+    cpus: 0,       // utmctl list doesn't show resources — get from status
+    ram_mb: 0,
     disk_gb: 0,
     ssh_port: null,
     vnc_url: null,
-    screenshot_url: `${UTM_URL}/vms/${vm.uuid || vm.id}/screenshot`,
+    screenshot_url: null,
     platform: 'apple-silicon',
   };
 }
 
-// ── Public API ──────────────────────────────────────────────────────
-
-async function isUTMAvailable() {
-  const result = await utmRequest('GET', '/vms');
-  return Array.isArray(result);
+function detectOS(name = '') {
+  const n = name.toLowerCase();
+  if (n.includes('macos') || n.includes('mac os') || n.includes('sonoma') || n.includes('ventura') || n.includes('monterey') || n.includes('sequoia')) return 'macos';
+  if (n.includes('windows') || n.includes('win11') || n.includes('win10')) return 'windows';
+  if (n.includes('ubuntu')) return 'ubuntu';
+  if (n.includes('debian')) return 'debian';
+  if (n.includes('alpine')) return 'alpine';
+  if (n.includes('fedora')) return 'fedora';
+  if (n.includes('arch')) return 'arch';
+  return 'linux';
 }
 
-async function listUTMVMs() {
-  const result = await utmRequest('GET', '/vms');
-  if (!Array.isArray(result)) return [];
-  return result.map(mapToVMShape);
+function detectOSDisplay(name = '') {
+  const os = detectOS(name);
+  const map = { macos: 'macOS', windows: 'Windows', ubuntu: 'Ubuntu', debian: 'Debian', alpine: 'Alpine', fedora: 'Fedora', arch: 'Arch', linux: 'Linux' };
+  return map[os] || 'Linux';
 }
 
-async function getUTMStatus() {
-  const vms = await utmRequest('GET', '/vms');
-  if (!Array.isArray(vms)) return { available: false, vm_count: 0 };
-  return { available: true, vm_count: vms.length };
+function mapStatus(status = '') {
+  const s = status.toLowerCase();
+  if (s === 'started' || s === 'running') return 'running';
+  if (s === 'starting') return 'starting';
+  if (s === 'stopping' || s === 'suspending') return 'stopping';
+  if (s === 'paused' || s === 'suspended') return 'stopped';
+  return 'stopped';
 }
+
+// ── VM Lifecycle ──────────────────────────────────────────────────────
 
 async function startUTMVM(uuid) {
-  return utmRequest('POST', `/vms/${uuid}/start`);
+  const result = await utmctl('start', uuid);
+  return { success: result !== null, message: result || 'Failed to start VM' };
 }
 
 async function stopUTMVM(uuid, force = false) {
-  return utmRequest('POST', `/vms/${uuid}/stop`, { force });
+  const args = force ? ['stop', uuid, '--kill'] : ['stop', uuid];
+  const result = await utmctl(...args);
+  return { success: result !== null, message: result || 'Failed to stop VM' };
+}
+
+async function suspendUTMVM(uuid) {
+  const result = await utmctl('suspend', uuid);
+  return { success: result !== null };
 }
 
 async function deleteUTMVM(uuid) {
-  return utmRequest('DELETE', `/vms/${uuid}`);
+  const result = await utmctl('delete', uuid);
+  return { success: result !== null };
 }
 
-async function getUTMVMScreenshot(uuid) {
-  return `${UTM_URL}/vms/${uuid}/screenshot`;
+async function cloneUTMVM(uuid, newName) {
+  const args = newName ? ['clone', uuid, '--name', newName] : ['clone', uuid];
+  const result = await utmctl(...args);
+  return { success: result !== null, output: result };
 }
+
+async function getUTMVMStatus(uuid) {
+  const output = await utmctl('status', uuid);
+  if (!output) return null;
+  // Parse: "Status: started" etc
+  const statusMatch = output.match(/status:\s*(\w+)/i);
+  return statusMatch ? mapStatus(statusMatch[1]) : 'unknown';
+}
+
+async function getUTMVMIPAddress(uuid) {
+  const output = await utmctl('ip-address', uuid);
+  if (!output) return null;
+  const lines = output.split('\n').filter(l => l.trim());
+  return lines[0] || null;
+}
+
+// ── Create VM ─────────────────────────────────────────────────────────
+// utmctl doesn't support create — users create VMs in UTM UI
+// We expose this as a message directing them to UTM
 
 async function createUTMVM(spec) {
-  // Map our spec to UTM create format
-  const osMap = {
-    'macos-sonoma': { backend: 'apple', operatingSystem: 'macOS' },
-    'windows-11-arm': { backend: 'apple', operatingSystem: 'windows' },
-    'ubuntu-24-arm': { backend: 'apple', operatingSystem: 'linux' },
-    'linux-generic': { backend: 'qemu', operatingSystem: 'linux' },
+  return {
+    success: false,
+    manual: true,
+    message: `Open UTM to create a new VM. Recommended: use UTM Gallery for one-click ${spec.os || 'Linux'} install.`,
+    utm_gallery_url: 'https://mac.getutm.app/gallery/',
   };
-  const osConfig = osMap[spec.os] || osMap['linux-generic'];
-  return utmRequest('POST', '/vms', {
-    name: spec.name,
-    backend: osConfig.backend,
-    operatingSystem: osConfig.operatingSystem,
-    cpuCount: spec.cpus || 2,
-    memorySize: (spec.ram_mb || 4096) * 1024 * 1024,
-    diskSize: (spec.disk_gb || 64) * 1024 * 1024 * 1024,
-  });
+}
+
+// ── Exec on Guest ─────────────────────────────────────────────────────
+
+async function execOnVM(uuid, command) {
+  const result = await utmctl('exec', uuid, '--', ...command.split(' '));
+  return { success: result !== null, output: result };
+}
+
+// ── Status Summary ────────────────────────────────────────────────────
+
+async function getUTMStatus() {
+  const available = await isUTMAvailable();
+  if (!available) return { available: false, vm_count: 0 };
+  const vms = await listUTMVMs();
+  return {
+    available: true,
+    vm_count: vms.length,
+    running: vms.filter(v => v.running).length,
+    version: await utmctl('version'),
+  };
 }
 
 module.exports = {
@@ -129,7 +181,11 @@ module.exports = {
   getUTMStatus,
   startUTMVM,
   stopUTMVM,
+  suspendUTMVM,
   deleteUTMVM,
-  getUTMVMScreenshot,
+  cloneUTMVM,
+  getUTMVMStatus,
+  getUTMVMIPAddress,
+  execOnVM,
   createUTMVM,
 };
