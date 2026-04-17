@@ -16,17 +16,21 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
   useEffect(() => {
     if (isAuthenticated) { setReady(true); return; }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2000);
     fetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username: 'admin', password: 'OmniFlow2026!' }),
+      signal: controller.signal,
     })
       .then(r => r.json())
       .then(data => {
         if (data.accessToken) { login(data.accessToken, data.user); }
         setReady(true);
       })
-      .catch(() => setReady(true));
+      .catch(() => setReady(true))
+      .finally(() => clearTimeout(timeout));
   }, []);
 
   if (!ready) return (

@@ -102,7 +102,7 @@ function useRecentOutputs() {
 }
 
 export default function DashboardPage() {
-  const { services, isLoading: servicesLoading, refetch, upCount, downCount } = useServices();
+  const { services, isLoading: servicesLoading, refetch, upCount, downCount, dockerOfflineCount } = useServices();
   const { data: stats, isLoading: statsLoading } = useSystemStats();
   const { data: recentOutputs = [], isLoading: outputsLoading } = useRecentOutputs();
   const { missions: ariaMissions, agents: ariaAgents, budget: ariaBudget } = useAriaData();
@@ -191,12 +191,19 @@ export default function DashboardPage() {
           <div className="bg-red-950/50 border border-red-800/50 rounded-2xl px-4 py-3 flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
             <p className="text-sm text-red-300 font-medium">
-              {downCount} service{downCount > 1 ? 's are' : ' is'} unreachable
+              Carbon Core unreachable · Run: <code className="font-mono text-xs bg-red-900/50 px-1 py-0.5 rounded">node api-server-v2.js</code>
             </p>
           </div>
         )}
 
-        {!servicesLoading && downCount === 0 && totalServices > 0 && (
+        {!servicesLoading && downCount === 0 && dockerOfflineCount > 0 && (
+          <div className="bg-blue-950/40 border border-blue-800/40 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-blue-400 flex-shrink-0" />
+            <p className="text-sm text-blue-300 font-medium">Docker services offline · Carbon Core running</p>
+          </div>
+        )}
+
+        {!servicesLoading && downCount === 0 && dockerOfflineCount === 0 && totalServices > 0 && (
           <div className="bg-green-950/40 border border-green-800/40 rounded-2xl px-4 py-3 flex items-center gap-3">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 flex-shrink-0" />
             <p className="text-sm text-green-300 font-medium">All systems operational</p>

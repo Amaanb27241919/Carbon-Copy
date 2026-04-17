@@ -5,7 +5,7 @@ import { Activity, DollarSign, Server, Shield, Cpu, Zap, GitBranch, Users } from
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
 
-const CORE_API = process.env.NEXT_PUBLIC_CORE_API_URL || '/api/v2';
+const CORE_API = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api/v2';
 
 async function fetchCore(path: string) {
   const res = await fetch(`${CORE_API}${path}`);
@@ -71,6 +71,14 @@ export default function CorePage() {
       <div className="px-4 py-4 space-y-6 page-enter">
 
         {/* Health Banner */}
+        {health.isError && !h && (
+          <div className="bg-red-950/50 border border-red-800/50 rounded-2xl px-4 py-3 flex items-center gap-3">
+            <span className="w-2.5 h-2.5 rounded-full bg-red-500 flex-shrink-0 animate-pulse" />
+            <p className="text-sm text-red-300 font-medium">
+              Carbon Core unreachable · Run: <code className="font-mono text-xs bg-red-900/50 px-1 py-0.5 rounded">node api-server-v2.js</code>
+            </p>
+          </div>
+        )}
         {h && (
           <div className={cn(
             'rounded-2xl px-4 py-3 flex items-center gap-3 border',

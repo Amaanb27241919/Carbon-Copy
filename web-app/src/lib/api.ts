@@ -65,9 +65,10 @@ export const authApi = {
 export interface ServiceHealth {
   name: string;
   url: string;
-  status: 'up' | 'down' | 'unknown';
+  status: 'up' | 'down' | 'offline' | 'unknown';
   lastChecked: Date;
   responseTime?: number;
+  dockerOnly?: boolean;
 }
 
 export interface Container {

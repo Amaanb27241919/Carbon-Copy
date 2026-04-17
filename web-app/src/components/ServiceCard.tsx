@@ -21,6 +21,12 @@ const STATUS_CONFIG = {
     labelClass: 'text-red-400',
     bgGlow: 'shadow-[0_0_0_1px_rgba(239,68,68,0.1)]',
   },
+  offline: {
+    dotClass: 'status-dot-unknown',
+    label: 'Docker required',
+    labelClass: 'text-amber-400',
+    bgGlow: 'shadow-[0_0_0_1px_rgba(245,158,11,0.08)]',
+  },
   unknown: {
     dotClass: 'status-dot-unknown',
     label: 'Unknown',
