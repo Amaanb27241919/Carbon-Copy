@@ -54,7 +54,7 @@ const {
 
 const { generateProposal } = require('./core/proposal-service.js');
 const { getVMStatusSummary } = require('./core/vm-manager-client.js');
-const { chat: modelChat, getProviders, getLocalModels } = require('./core/model-router-client.js');
+const { chat: modelChat, getProviders, getLocalModels, pullLocalModel } = require('./core/model-router-client.js');
 const { getAllExpertAgents, findBestAgent } = require('./core/expert-agents.js');
 const { startRalphLoop, getRalphStatus, stopRalphLoop, getAllRalphLoops } = require('./core/ralph-loop.js');
 const { listHooks, registerHook, registerDefaultHooks, triggerHooks } = require('./core/hooks-engine.js');
@@ -232,6 +232,47 @@ app.post('/api/v2/orchestration', (req, res) => {
   res.json(result);
 });
 
+
+// Missions (alias for orchestration runs, formatted as AriaMission shape)
+function formatRunAsMission(run) {
+  return {
+    id: run.id,
+    goal: run.task,
+    status: run.status,
+    tokens_used: 0,
+    cost_usd: 0,
+    created_at: run.started_at ? new Date(run.started_at).toISOString() : new Date().toISOString(),
+    completed_at: run.ended_at ? new Date(run.ended_at).toISOString() : null,
+    output: run.result ? { summary: String(run.result).slice(0, 200) } : null,
+    mode: run.mode || 'phased',
+    agent_count: run.agent_runs?.length || 0,
+  };
+}
+
+app.get('/api/v2/missions', (req, res) => {
+  try {
+    const runs = getAllOrchestrationRuns({ limit: parseInt(req.query.limit) || 50 });
+    const missions = (Array.isArray(runs) ? runs : runs.runs || []).map(formatRunAsMission);
+    res.json(missions);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/v2/missions', (req, res) => {
+  const { goal, mode, context } = req.body;
+  if (!goal) return res.status(400).json({ error: 'goal required' });
+  try {
+    const result = orchestratePhased({ task: goal, options: { mode: mode || 'phased', context } });
+    res.json({ missionId: result.runId || result.id, status: 'running' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/v2/missions/:id', (req, res) => {
+  try {
+    const run = getOrchestrationRun(req.params.id);
+    return run ? res.json(formatRunAsMission(run)) : res.status(404).json({ error: 'Mission not found' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Usage
 app.get('/api/v2/usage', (req, res) => { try { res.json(getUsageSummary()); } catch (e) { res.status(500).json({ error: e.message }); } });
 app.get('/api/v2/usage/window', (req, res) => { try { res.json(getUsageWindow(parseInt(req.query.days) || 7)); } catch (e) { res.status(500).json({ error: e.message }); } });
@@ -257,6 +298,93 @@ app.get('/api/v2/models/providers', async (req, res) => {
 app.get('/api/v2/models/local', async (req, res) => {
   try { res.json(await getLocalModels()); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Agents — combined view (expert + pipeline + active runs)
+app.get('/api/v2/agents', (req, res) => {
+  try {
+    const expert_agents = getAllExpertAgents();
+    const active_runs = getActiveRuns();
+    const pipeline_agents = [
+      { id: 'scan', name: 'Scan', role: 'Orchestrator', status: 'idle', description: 'Routes tasks to the right agent' },
+      { id: 'research', name: 'Research', role: 'Researcher', status: 'idle', description: 'Executes deep AI research' },
+      { id: 'synthesizer', name: 'Synthesizer', role: 'Synthesizer', status: 'idle', description: 'Formats research output' },
+      { id: 'delivery', name: 'Delivery', role: 'Delivery', status: 'idle', description: 'Dispatches results via email/Slack' },
+      { id: 'client_mgr', name: 'Client Manager', role: 'Manager', status: 'idle', description: 'Manages client preferences' },
+    ];
+    res.json({
+      expert_agents,
+      pipeline_agents,
+      active_runs,
+      stats: { total_runs: getTotalRuns(), active: active_runs.length },
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Unified model list (Ollama + Claude + OpenAI)
+app.get('/api/v2/models', async (req, res) => {
+  const claudeAvailable = !!process.env.ANTHROPIC_API_KEY;
+  const openaiAvailable = !!process.env.OPENAI_API_KEY;
+
+  try {
+    const data = await getProviders();
+    const providers = data.providers || [];
+    const ollamaProvider = providers.find(p => p.name === 'ollama');
+    const claudeProvider = providers.find(p => p.name === 'claude');
+    const openaiProvider = providers.find(p => p.name === 'openai');
+
+    let ollamaModels = [];
+    if (ollamaProvider?.available) {
+      try {
+        const localData = await getLocalModels();
+        ollamaModels = (localData.models || []).map(m => ({
+          id: m.name || m.id,
+          name: m.name || m.id,
+          provider: 'ollama',
+          available: true,
+          size: m.size,
+        }));
+      } catch {
+        ollamaModels = [{ id: 'llama3.2', name: 'Llama 3.2', provider: 'ollama', available: true }];
+      }
+    } else {
+      ollamaModels = [{ id: 'llama3.2', name: 'Llama 3.2', provider: 'ollama', available: false }];
+    }
+
+    res.json({
+      models: [
+        ...ollamaModels,
+        { id: 'claude-sonnet-4-6', name: 'Claude Sonnet', provider: 'claude', available: claudeProvider?.available ?? claudeAvailable },
+        { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', available: openaiProvider?.available ?? openaiAvailable },
+      ],
+    });
+  } catch {
+    // model-router unreachable — return static list
+    res.json({
+      models: [
+        { id: 'llama3.2', name: 'Llama 3.2', provider: 'ollama', available: false },
+        { id: 'claude-sonnet-4-6', name: 'Claude Sonnet', provider: 'claude', available: claudeAvailable },
+        { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai', available: openaiAvailable },
+      ],
+    });
+  }
+});
+
+// Pull an Ollama model
+app.post('/api/v2/models/pull', async (req, res) => {
+  const { model } = req.body;
+  if (!model) return res.status(400).json({ error: 'model required' });
+  try {
+    await pullLocalModel(model);
+    res.json({ success: true, message: `Pulling ${model}...` });
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('ECONNREFUSED') || msg.includes('fetch failed') || msg.includes('Failed to fetch')) {
+      res.json({ error: 'Ollama not running. Start with: docker run ollama/ollama' });
+    } else {
+      res.json({ error: msg || 'Pull failed' });
+    }
+  }
 });
 
 // Expert Agents

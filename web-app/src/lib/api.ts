@@ -208,6 +208,31 @@ export interface CoreChatResponse {
 
 const CORE_API_BASE = process.env.NEXT_PUBLIC_CORE_API_URL || '/app/core-api';
 
+export interface ExpertAgent {
+  id: string;
+  name: string;
+  description?: string;
+  system_prompt?: string;
+  tags?: string[];
+}
+
+export interface PipelineAgent {
+  id: string;
+  name: string;
+  role: string;
+  status: 'idle' | 'running';
+  description: string;
+}
+
+export interface ActiveRun {
+  id: string;
+  agent_id: string;
+  status: string;
+  started_at: string;
+  prompt_preview?: string;
+  cost_usd?: number;
+}
+
 export const coreApi = {
   chat: async (
     messages: Array<{ role: string; content: string }>,
@@ -224,20 +249,58 @@ export const coreApi = {
     }
     return res.json() as Promise<CoreChatResponse>;
   },
+  getAgents: async (): Promise<{
+    expert_agents: ExpertAgent[];
+    pipeline_agents: PipelineAgent[];
+    active_runs: ActiveRun[];
+    stats: { total_runs: number; active: number };
+  }> => {
+    const res = await fetch(`${CORE_API_BASE}/agents`);
+    if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+    return res.json();
+  },
   getModels: async (): Promise<AIModel[]> => {
     try {
-      const res = await fetch(`${CORE_API_BASE}/chat/models`);
+      const res = await fetch(`${CORE_API_BASE}/models`);
       if (!res.ok) return [];
-      const data = await res.json() as { models?: Array<{ id: string; name: string; provider: string; available: boolean }> };
+      const data = await res.json() as { models?: Array<{ id: string; name: string; provider: string; available: boolean; size?: string }> };
       return (data.models || []).map(m => ({
         id: m.id,
         name: m.name || m.id,
         provider: m.provider as AIModel['provider'],
         available: m.available,
+        size: m.size,
       }));
     } catch {
       return [];
     }
+  },
+  pullModel: async (modelName: string): Promise<{ success?: boolean; error?: string }> => {
+    const res = await fetch(`${CORE_API_BASE}/models/pull`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelName }),
+    });
+    return res.json() as Promise<{ success?: boolean; error?: string }>;
+  },
+  getMissions: async (params?: { status?: string; limit?: number }): Promise<AriaMission[]> => {
+    const url = new URL(`${CORE_API_BASE}/missions`, window.location.origin);
+    if (params?.limit) url.searchParams.set('limit', String(params.limit));
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    return res.json() as Promise<AriaMission[]>;
+  },
+  createMission: async (payload: { goal: string; mode?: string; context?: string }): Promise<{ missionId: string; status: string }> => {
+    const res = await fetch(`${CORE_API_BASE}/missions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    return res.json() as Promise<{ missionId: string; status: string }>;
+  },
+  getMission: async (id: string): Promise<AriaMission> => {
+    const res = await fetch(`${CORE_API_BASE}/missions/${id}`);
+    return res.json() as Promise<AriaMission>;
   },
 };
 
@@ -255,14 +318,16 @@ export const settingsApi = {
 
 export interface AriaMission {
   id: string;
-  client_id: string;
+  client_id?: string;
   goal: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
   tokens_used: number;
   cost_usd: number;
   output?: Record<string, unknown>;
   created_at: string;
-  completed_at?: string;
+  completed_at?: string | null;
+  mode?: string;
+  agent_count?: number;
 }
 
 export interface AriaAgent {

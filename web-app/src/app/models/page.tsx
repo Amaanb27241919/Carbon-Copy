@@ -12,7 +12,7 @@ import {
   Zap,
   MessageSquare,
 } from 'lucide-react';
-import { modelsApi, AIModel, ChatMessage } from '@/lib/api';
+import { coreApi, AIModel, ChatMessage } from '@/lib/api';
 import { ChatBubble, TypingBubble } from '@/components/ChatBubble';
 import { PageHeader } from '@/components/PageHeader';
 import { cn, providerColors, providerEmoji, getErrorMessage } from '@/lib/utils';
@@ -149,28 +149,33 @@ export default function ModelsPage() {
 
   const { data: models = [], isLoading, refetch } = useQuery<AIModel[]>({
     queryKey: ['models'],
-    queryFn: modelsApi.list,
+    queryFn: coreApi.getModels,
     staleTime: 60_000,
   });
 
   const pullMutation = useMutation({
-    mutationFn: modelsApi.pull,
-    onSuccess: () => {
-      toast('success', 'Model pull started — check back soon');
-      setShowPullModal(false);
-      setTimeout(() => refetch(), 3000);
+    mutationFn: coreApi.pullModel,
+    onSuccess: (data) => {
+      if (data.error) {
+        toast('error', data.error);
+      } else {
+        toast('success', 'Model pull started — check back soon');
+        setShowPullModal(false);
+        setTimeout(() => refetch(), 3000);
+      }
     },
     onError: (err) => toast('error', getErrorMessage(err)),
   });
 
   const chatMutation = useMutation({
-    mutationFn: modelsApi.chat,
+    mutationFn: ({ model, message, history }: { model: string; message: string; history: Array<{ role: string; content: string }> }) =>
+      coreApi.chat([...history, { role: 'user', content: message }], model),
     onSuccess: (data) => {
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: data.response,
+          content: data.content || data.error || '',
           timestamp: new Date(),
         },
       ]);
