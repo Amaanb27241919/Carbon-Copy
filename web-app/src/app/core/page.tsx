@@ -5,7 +5,7 @@ import { Activity, DollarSign, Server, Shield, Cpu, Zap, GitBranch, Users } from
 import { PageHeader } from '@/components/PageHeader';
 import { cn } from '@/lib/utils';
 
-const CORE_API = process.env.NEXT_PUBLIC_CORE_API_URL || 'http://localhost:3001/api/v2';
+const CORE_API = process.env.NEXT_PUBLIC_CORE_API_URL || '/app/core-api';
 
 async function fetchCore(path: string) {
   const res = await fetch(`${CORE_API}${path}`);

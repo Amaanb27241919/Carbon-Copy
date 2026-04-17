@@ -7,7 +7,7 @@ import { ServiceHealth } from '@/lib/api';
 // Services to health-check.
 // Carbon Core (/api/v2) works standalone. Docker services need full stack.
 const SERVICES: Array<{ name: string; endpoint: string; noAuth?: boolean; direct?: string; dockerOnly?: boolean }> = [
-  { name: 'Carbon Core',  endpoint: '/api/v2/ping',        noAuth: true, direct: 'http://localhost:3001/api/v2/ping' },
+  { name: 'Carbon Core',  endpoint: '/core-api/ping',      noAuth: true },
   { name: 'Gateway',      endpoint: '/health',             noAuth: true, dockerOnly: true },
   { name: 'Auth',         endpoint: '/auth/health',        noAuth: true, dockerOnly: true },
   { name: 'Model Router', endpoint: '/api/models',         noAuth: true, dockerOnly: true },
@@ -28,8 +28,8 @@ async function checkService(
   const token = typeof window !== 'undefined'
     ? JSON.parse(localStorage.getItem('carbon-auth') || '{}')?.state?.token || ''
     : '';
-  // Try direct URL first (for standalone mode), fall back to gateway
-  const url = direct || `http://localhost${endpoint}`;
+  // All calls go through Next.js proxy — works in both standalone and Docker mode
+  const url = `http://localhost:3006/app${endpoint}`;
   try {
     await axios.get(url, {
       timeout: 5000,

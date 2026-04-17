@@ -28,7 +28,18 @@ const nextConfig = {
   eslint: { ignoreDuringBuilds: true },
   env: {
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost/api',
-    NEXT_PUBLIC_APP_NAME: 'Carbon Cloud',
+    NEXT_PUBLIC_APP_NAME: 'Carbon Core',
+    NEXT_PUBLIC_CORE_API_URL: process.env.NEXT_PUBLIC_CORE_API_URL || '/app/core-api',
+  },
+  async rewrites() {
+    const coreApiUrl = process.env.CORE_API_URL || 'http://localhost:3001';
+    return [
+      {
+        // basePath is /app, so source is relative to that — becomes /app/core-api/*
+        source: '/core-api/:path*',
+        destination: `${coreApiUrl}/api/v2/:path*`,
+      },
+    ];
   },
   async headers() {
     return [
